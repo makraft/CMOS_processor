@@ -6,7 +6,9 @@ import imageio
 import numpy as np
 import os
 import pylab
-
+import time
+import pandas
+import matplotlib.pyplot as plt
 
 # Edit this line to select the job to be processed
 job_name = "A103"
@@ -16,12 +18,10 @@ Offset_Y = 808
 Width = 256
 Height = 300
 
-def crop_CMOS_image(image):
-    return None
-
 def create_file_list(job):
     """
-    Creates a list of paths to individual part files, based on the CMOS data.
+    Creates a list of dictionaries with data of and paths to individual part 
+    files, based on the CMOS data.
     """
     file_list = []
     filename_prefix = "Jobs/{0}/hsCamera/".format(job)
@@ -30,16 +30,22 @@ def create_file_list(job):
         layer_list = os.listdir(filename_prefix + part_number)
         for layer in layer_list:
             filename = filename_prefix + part_number + "/" + layer
-            file_list.append(filename)
+            file_dict ={'filename':filename,
+                'part_number':part_number,
+                'layer':layer.split('.')[0]}
+            file_list.append(file_dict)
     return(file_list)
 
-def create_image_array_from_mkv(filename):
+def process_mkv(file):
     """
-    Process a .mkv file into an array of images. Reduce the size of the
-    image to reduce storage requirements. Remove noise from images.
+    Process a .mkv file into a datafram.
     """
     image_array = []
-    CMOS_video = imageio.get_reader(filename, 'ffmpeg')
+    image_index_array = []
+    intensity_array = []
+
+
+    CMOS_video = imageio.get_reader(file['filename'], 'ffmpeg')
     # Image borders where the melt pool is situated:
     x_min = 850
     x_max = 950
@@ -53,6 +59,8 @@ def create_image_array_from_mkv(filename):
     noise_picture_total = 0
 
     for frame_number, image in enumerate(CMOS_video, start=1):
+        if frame_number > 500:
+            break
         # Convert image to black and white
         image_bw = image[:,:,0].reshape(image.shape[0],image.shape[1])
         #display_image(image_bw)
@@ -68,16 +76,29 @@ def create_image_array_from_mkv(filename):
             noise_picture_total +=1
 
         image_array.append(image_cropped)
+        image_index_array.append(frame_number)
+
     # average noise mask
     noise_mask = np.divide(noise_mask,
         np.full(noise_mask.shape,noise_picture_total))
-    # remove noise out of each image
+
     for index, image in enumerate(image_array):
+        # denoise images
         image_min_noise = (image - noise_mask)
-        # convert negaive pixels to 0
+        # convert negative pixels to 0
         image_min_noise[image_min_noise < 0] = 0
         image_array[index] = image_min_noise.astype(np.uint8)
-    return image_array
+        # calculate total intensity
+        intensity_array.append(np.sum(image_array[index]))
+
+    plt.plot(intensity_array)
+
+    df = pandas.DataFrame(index=image_index_array)
+    df['image'] = image_array
+    df['intensity'] = intensity_array
+    df['part'] = file['part_number']
+    df['layer'] = file['layer']
+    return df
 
 def display_image(image):
     """
@@ -91,17 +112,16 @@ if __name__ == "__main__":
     file_list = create_file_list(job_name)
     # todo: Load all CMOS images into an array
     for file in file_list:
-        # Load CMOS images into array
-        create_image_array_from_mkv(file)
+        # Fetch and process images form the .mkv file
+        tstart = time.time()
+        image_df = process_mkv(file)
+        print(time.time()-tstart)
+        pass
 
-    # todo: Transform and process CMOS images
+        # todo: (optional) store processed CMOS images
 
-    # todo: (optional) store processed CMOS images
+        # todo: process pyro data
 
-    # todo: load pyro data into array
-
-    # todo: process pyro data
-
-    # todo: fit pyro & CMOS data
+        # todo: fit pyro & CMOS data
 
     # todo: store CMOS image table
