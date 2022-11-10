@@ -24,13 +24,20 @@ def create_file_list(job):
     files, based on the CMOS data.
     """
     file_list = []
-    filename_prefix = "Jobs/{0}/hsCamera/".format(job)
-    part_number_list = os.listdir(filename_prefix)
+    filename_camera_prefix = "Jobs/{0}/hsCamera/".format(job)
+    filename_pyro1_prefix = "Jobs/{0}/2Pyrometer/pyrometer1/".format(job)
+    filename_pyro2_prefix = "Jobs/{0}/2Pyrometer/pyrometer2/".format(job)
+    part_number_list = os.listdir(filename_camera_prefix)
     for part_number in part_number_list:
-        layer_list = os.listdir(filename_prefix + part_number)
+        layer_list = os.listdir(filename_camera_prefix + part_number)
         for layer in layer_list:
-            filename = filename_prefix + part_number + "/" + layer
-            file_dict ={'filename':filename,
+            filename_camera = filename_camera_prefix + part_number + "/" + layer
+            l_pyro = layer.split('.')[0] + '.pcd'
+            filename_pyro1 = filename_pyro1_prefix + part_number + "/" + l_pyro
+            filename_pyro2 = filename_pyro2_prefix + part_number + "/" + l_pyro
+            file_dict ={'filename_camera':filename_camera,
+                'filename_pyro1': filename_pyro1,
+                'filename_pyro2': filename_pyro2,
                 'part_number':part_number,
                 'layer':layer.split('.')[0]}
             file_list.append(file_dict)
@@ -45,7 +52,7 @@ def process_mkv(file):
     intensity_array = []
 
 
-    CMOS_video = imageio.get_reader(file['filename'], 'ffmpeg')
+    CMOS_video = imageio.get_reader(file['filename_camera'], 'ffmpeg')
     # Image borders where the melt pool is situated:
     x_min = 850
     x_max = 950
