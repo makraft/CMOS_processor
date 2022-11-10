@@ -13,7 +13,7 @@ job_name = "A103"
 # Specify the CMOS camera settings.
 Offset_X = 832
 Offset_Y = 808
-Width = 288
+Width = 256
 Height = 300
 
 def crop_CMOS_image(image):
@@ -35,16 +35,49 @@ def create_file_list(job):
 
 def create_image_array_from_mkv(filename):
     """
-    Process a .mkv file into an array of images. Also reduce the size of the
-    image to reduce storage requirements.
+    Process a .mkv file into an array of images. Reduce the size of the
+    image to reduce storage requirements. Remove noise from images.
     """
+    image_array = []
     CMOS_video = imageio.get_reader(filename, 'ffmpeg')
+    # Image borders where the melt pool is situated:
+    x_min = 850
+    x_max = 950
+    y_min = 810
+    y_max = 910
+    # Set a threshhold value to prevent melt pools from being classified as
+    # noise.
+    noise_threshold_value = 23
+    # Create an empty noise mask which is subtracted from all pictures.
+    noise_mask = np.full([y_max-y_min,x_max-x_min],0)
+    noise_picture_total = 0
+
     for frame_number, image in enumerate(CMOS_video, start=1):
         # Convert image to black and white
         image_bw = image[:,:,0].reshape(image.shape[0],image.shape[1])
         #display_image(image_bw)
 
         # Crop image to relevant area
+        image_cropped = image_bw[
+            (y_min - Offset_Y):(y_max - Offset_Y),
+            (x_min - Offset_X):(x_max - Offset_X)
+        ]
+        # Update noise_mask
+        if np.amax(image_cropped) < noise_threshold_value:
+            noise_mask += image_cropped
+            noise_picture_total +=1
+
+        image_array.append(image_cropped)
+    # average noise mask
+    noise_mask = np.divide(noise_mask,
+        np.full(noise_mask.shape,noise_picture_total))
+    # remove noise out of each image
+    for index, image in enumerate(image_array):
+        image_min_noise = (image - noise_mask)
+        # convert negaive pixels to 0
+        image_min_noise[image_min_noise < 0] = 0
+        image_array[index] = image_min_noise.astype(np.uint8)
+    return image_array
 
 def display_image(image):
     """
