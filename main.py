@@ -2,6 +2,7 @@
 Transform data from the Aconity CMOS high speed camera and assign machine
 coordinates by utilizing date from the pyrometers.
 """
+import statistics
 import imageio
 import numpy as np
 import os
@@ -11,12 +12,18 @@ import pandas
 import matplotlib.pyplot as plt
 
 # Edit this line to select the job to be processed
-job_name = "A103"
+job_name = "B002"
 # Specify the CMOS camera settings.
 Offset_X = 832
 Offset_Y = 808
 Width = 256
 Height = 300
+
+# Specify settings for evaluating the main script
+# The script prints what it's doing
+verbal = True
+# Set limit to reducing computing time for image processing. Default = None
+image_number_limit =None
 
 def create_file_list(job):
     """
@@ -45,7 +52,7 @@ def create_file_list(job):
 
 def process_mkv(file):
     """
-    Process a .mkv file into a datafram.
+    Process a .mkv file into a dataframe.
     """
     image_array = []
     image_index_array = []
@@ -66,7 +73,7 @@ def process_mkv(file):
     noise_picture_total = 0
 
     for frame_number, image in enumerate(CMOS_video, start=1):
-        if frame_number > 500:
+        if image_number_limit is not None and frame_number > image_number_limit:
             break
         # Convert image to black and white
         image_bw = image[:,:,0].reshape(image.shape[0],image.shape[1])
@@ -97,14 +104,37 @@ def process_mkv(file):
         image_array[index] = image_min_noise.astype(np.uint8)
         # calculate total intensity
         intensity_array.append(np.sum(image_array[index]))
+    intensity_array = np.array(intensity_array, dtype=np.int64)
 
-    plt.plot(intensity_array)
+
+    # Calculate upper threshold value for Laser OFF intensity level
+    # Note: the first value usually is zero
+    OFF_level_array = np.array(intensity_array[1:21])
+    mean = statistics.mean(OFF_level_array)
+    OFF_threshold = mean + 6 * statistics.pstdev(OFF_level_array,mean)
+    if verbal:
+        print("Threshold value = " + str(OFF_threshold))
+    
+    # Determine if below or above threshold
+    signs_array = np.sign(intensity_array - OFF_threshold)
+    pass
+    
+    fig, ax = plt.subplots()
+    ax.plot(intensity_array,color="blue")
+    plt.axhline(OFF_threshold, color="green")
+    ax2 = ax.twinx()
+    ax2.plot(signs_array,color="red")
+    plt.show()
 
     df = pandas.DataFrame(index=image_index_array)
     df['image'] = image_array
     df['intensity'] = intensity_array
+    df['threshold'] = signs_array
     df['part'] = file['part_number']
     df['layer'] = file['layer']
+#    a = df["intensity"].rolling(5).mean()
+#    plt.plot(a)
+#    plt.show()
     return df
 
 def display_image(image):
@@ -120,9 +150,12 @@ if __name__ == "__main__":
     # todo: Load all CMOS images into an array
     for file in file_list:
         # Fetch and process images form the .mkv file
-        tstart = time.time()
+        if verbal == True:
+            print("Started processing: " + file['filename_camera'])
+            tstart = time.time()
         image_df = process_mkv(file)
-        print(time.time()-tstart)
+        if verbal:
+            print("Process finished in {0} seconds".format(time.time()-tstart))
         pass
 
         # todo: (optional) store processed CMOS images
