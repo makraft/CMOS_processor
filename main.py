@@ -2,6 +2,7 @@
 Transform data from the Aconity CMOS high speed camera and assign machine
 coordinates by utilizing date from the pyrometers.
 """
+import csv
 import statistics
 import imageio
 import numpy as np
@@ -39,7 +40,7 @@ def create_file_list(job):
         layer_list = os.listdir(filename_camera_prefix + part_number)
         for layer in layer_list:
             filename_camera = filename_camera_prefix + part_number + "/" + layer
-            l_pyro = layer.split('.')[0] + '.pcd'
+            l_pyro = layer.split('.')[0].replace("-",".") + '.pcd'
             filename_pyro1 = filename_pyro1_prefix + part_number + "/" + l_pyro
             filename_pyro2 = filename_pyro2_prefix + part_number + "/" + l_pyro
             file_dict ={'filename_camera':filename_camera,
@@ -117,7 +118,6 @@ def process_mkv(file):
     
     # Determine if below or above threshold
     signs_array = np.sign(intensity_array - OFF_threshold)
-    pass
     
     fig, ax = plt.subplots()
     ax.plot(intensity_array,color="blue")
@@ -137,6 +137,27 @@ def process_mkv(file):
 #    plt.show()
     return df
 
+
+def process_pcd(file):
+    with open(file['filename_pyro1'], "r", newline='\n') as pyro_file:
+        reader = csv.reader(pyro_file, delimiter=' ')
+        scanner_id = next(reader)
+        scanner_protocol = next(reader)
+        scanner_x_field_size = next(reader)
+        scanner_y_field_size = next(reader)
+        scanner_x_offset = next(reader)
+        scanner_y_offset = next(reader)
+        scanner_rotation = next(reader)
+        scanner_field_correction_file = next(reader)
+        pyro_data = np.array(list(reader)).astype(np.int64)
+        # average out sensor values
+        window_width = 1000
+        intensity = np.convolve(pyro_data[:,2], np.ones(window_width), 'valid') / window_width
+        plt.plot(intensity)
+        plt.show()
+        pass
+    pass
+
 def display_image(image):
     """
     Display an image. This is a function meant for debugging.
@@ -147,20 +168,27 @@ def display_image(image):
 if __name__ == "__main__":
     
     file_list = create_file_list(job_name)
-    # todo: Load all CMOS images into an array
+    # Load all CMOS images into an array
     for file in file_list:
         # Fetch and process images form the .mkv file
         if verbal == True:
             print("Started processing: " + file['filename_camera'])
             tstart = time.time()
-        image_df = process_mkv(file)
+        #image_df = process_mkv(file)
         if verbal:
             print("Process finished in {0} seconds".format(time.time()-tstart))
         pass
 
         # todo: (optional) store processed CMOS images
 
-        # todo: process pyro data
+        # Fetch and process pyro data from the .pcd file
+        if verbal == True:
+            print("Started processing: " + file['filename_pyro1'])
+            tstart = time.time()
+        pyro1_df = process_pcd(file)
+        if verbal:
+            print("Process finished in {0} seconds".format(time.time()-tstart))
+
 
         # todo: fit pyro & CMOS data
 
