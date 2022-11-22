@@ -117,7 +117,7 @@ def process_mkv(file):
         print("Threshold value = " + str(OFF_threshold))
     
     # Determine if below or above threshold
-    signs_array = np.sign(intensity_array - OFF_threshold)
+    signs_array = (np.sign(intensity_array - OFF_threshold) +1)/2
     
 #    fig, ax = plt.subplots()
 #    ax.plot(intensity_array,color="blue")
@@ -127,11 +127,12 @@ def process_mkv(file):
 #    plt.show()
 
     df = pandas.DataFrame(index=image_index_array)
-    df['image'] = image_array
+#    df['image'] = image_array
     df['intensity'] = intensity_array
     df['threshold'] = signs_array
     df['part'] = file['part_number']
     df['layer'] = file['layer']
+    df['index'] = image_index_array
 #    a = df["intensity"].rolling(5).mean()
 #    plt.plot(a)
 #    plt.show()
@@ -174,7 +175,7 @@ def process_pcd(file):
         # check upper boundary
         signs_array_upper = (np.sign(scan_velocity_hatch_mmps + 200 - velocity_array_smoothed_mmps) +1)/2
         initial_high_speed = np.where(signs_array_upper < 1)
-        lower = initial_high_speed[0][0]
+        lower = initial_high_speed[0][0]        #Todo: handle exception where no initial high speed occurs
         upper = initial_high_speed[0][1]
         signs_array_upper[np.arange(lower-50,upper+21,1)] = 0
         signs_array = np.multiply(signs_array_lower,  signs_array_upper)
@@ -182,12 +183,12 @@ def process_pcd(file):
 #            np.sign(scan_velocity_hatch_mmps + 200 - velocity_array_smoothed_mmps) - 1)
 
 
-        fig, ax = plt.subplots()
-        ax.plot(velocity_array_smoothed_mmps,color="blue")
-        plt.axhline(scan_velocity_hatch_mmps, color="green")
-        ax2 = ax.twinx()
-        ax2.plot(signs_array,color="red")
-        plt.show()
+#        fig, ax = plt.subplots()
+#        ax.plot(velocity_array_smoothed_mmps,color="blue")
+#        plt.axhline(scan_velocity_hatch_mmps, color="green")
+#        ax2 = ax.twinx()
+#        ax2.plot(signs_array,color="red")
+#        plt.show()
 
         # Pack data into dataframe and return
         df['x'] = pyro_data[dt:,0]
@@ -196,6 +197,39 @@ def process_pcd(file):
         df['velocity'] = velocity_array_smoothed_mmps
         df['threshold'] = signs_array
     return df
+
+
+def extend_CMOS_data(df_camera, df_pyro):
+    """
+    Extend the CMOS camera dataframe with coordinates for each image, derived
+    from the pyrometer data.
+    """
+    camera_ON = np.where(df_camera['threshold'] == 1)
+    camera_ON_start = camera_ON[0][0]
+    camera_ON_end = camera_ON[0][-1]
+    pyro_ON = np.where(df_pyro['threshold'] == 1)
+    pyro_ON_start = pyro_ON[0][0]
+    pyro_ON_end = pyro_ON[0][-1]
+    # compute linear scaling factors
+    slope = (pyro_ON_end - pyro_ON_start)/(camera_ON_end - camera_ON_start)
+    offset = pyro_ON_end - slope * camera_ON_end
+    df_camera['index_pyro'] = df_camera['index'] * slope + offset
+    df_camera['index_pyro'] = df_camera['index_pyro'].round()
+    x_array = []
+    y_array = []
+    for index_pyro in df_camera['index_pyro']:
+        x_array.append(df_pyro.at[int(index_pyro),'x'],)
+        y_array.append(df_pyro.at[int(index_pyro),'y'],)
+    df_camera['x'] = x_array
+    df_camera['y'] = y_array
+
+
+    fig, ax = plt.subplots()
+    ax.plot(df_camera['index_pyro'],df_camera['threshold'],color="blue")
+    ax2 = ax.twinx()
+    ax2.plot(df_pyro['threshold'],color="red")
+    plt.show()
+    return
 
 def display_image(image):
     """
@@ -236,7 +270,7 @@ if __name__ == "__main__":
         if verbal == True:
             print("Started processing: " + file['filename_camera'])
             tstart = time.time()
-#        image_df = process_mkv(file)
+        image_df = process_mkv(file)
         if verbal:
             print("Process finished in {0} seconds".format(time.time()-tstart))
         pass
@@ -258,5 +292,6 @@ if __name__ == "__main__":
 #        ax2.plot(image_df['threshold'],color="red")
 #        plt.show()
         # todo: fit pyro & CMOS data
+        extend_CMOS_data(image_df, pyro1_df)
 
-    # todo: store CMOS image table
+    # todo: store CMOS image table 
