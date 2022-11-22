@@ -119,12 +119,12 @@ def process_mkv(file):
     # Determine if below or above threshold
     signs_array = np.sign(intensity_array - OFF_threshold)
     
-    fig, ax = plt.subplots()
-    ax.plot(intensity_array,color="blue")
-    plt.axhline(OFF_threshold, color="green")
-    ax2 = ax.twinx()
-    ax2.plot(signs_array,color="red")
-    plt.show()
+#    fig, ax = plt.subplots()
+#    ax.plot(intensity_array,color="blue")
+#    plt.axhline(OFF_threshold, color="green")
+#    ax2 = ax.twinx()
+#    ax2.plot(signs_array,color="red")
+#    plt.show()
 
     df = pandas.DataFrame(index=image_index_array)
     df['image'] = image_array
@@ -139,6 +139,7 @@ def process_mkv(file):
 
 
 def process_pcd(file):
+    df = pandas.DataFrame()
     with open(file['filename_pyro1'], "r", newline='\n') as pyro_file:
         reader = csv.reader(pyro_file, delimiter=' ')
         scanner_id = next(reader)
@@ -150,13 +151,51 @@ def process_pcd(file):
         scanner_rotation = next(reader)
         scanner_field_correction_file = next(reader)
         pyro_data = np.array(list(reader)).astype(np.int64)
-        # average out sensor values
-        window_width = 1000
-        intensity = np.convolve(pyro_data[:,2], np.ones(window_width), 'valid') / window_width
-        plt.plot(intensity)
+        assert np.sum(pyro_data[:,2]-pyro_data[:,3]) == 0, "The data in the two pyro value columns does not match"
+#        window_width = 10000
+#        intensity = np.convolve(pyro_data[:,2], np.ones(window_width), 'valid') / window_width
+#        plt.plot(intensity)
+#        plt.show()
+        # Compute velocity profile
+        dt = 1     # time interval for dx/dt, dy/dt
+        Dx = np.diff(pyro_data[:,0], dt).astype(np.float)
+        Dy = np.diff(pyro_data[:,1], dt).astype(np.float)
+        Dx_mm, Dy_mm = bit2mm(Dx, Dy)
+        velocity_array_mm = np.linalg.norm(np.stack((Dx_mm,Dy_mm), axis=1), axis=1) / dt
+        window_width = 50
+        velocity_array_smoothed_mm = np.convolve(velocity_array_mm, np.ones(window_width),mode='same') / window_width
+        # Convert velocity from mm*100kHz to mm/s
+        velocity_array_smoothed_mmps = velocity_array_smoothed_mm * 1e5
+        # Determine vectors based upon hatch speed
+        scan_velocity_hatch_mmps = 900 #mm/s
+        scan_velocity_contour_mmps = 1200 #mm/s
+        # check lower boundary
+        signs_array_lower = (np.sign(velocity_array_smoothed_mmps - (scan_velocity_hatch_mmps -200)) + 1)/2
+        # check upper boundary
+        signs_array_upper = (np.sign(scan_velocity_hatch_mmps + 200 - velocity_array_smoothed_mmps) +1)/2
+        initial_high_speed = np.where(signs_array_upper < 1)
+        lower = initial_high_speed[0][0]
+        upper = initial_high_speed[0][1]
+        signs_array_upper[np.arange(lower-50,upper+21,1)] = 0
+        signs_array = np.multiply(signs_array_lower,  signs_array_upper)
+#        signs_array = (np.sign(velocity_array_smoothed_mmps - (scan_velocity_hatch_mmps -200)) + 
+#            np.sign(scan_velocity_hatch_mmps + 200 - velocity_array_smoothed_mmps) - 1)
+
+
+        fig, ax = plt.subplots()
+        ax.plot(velocity_array_smoothed_mmps,color="blue")
+        plt.axhline(scan_velocity_hatch_mmps, color="green")
+        ax2 = ax.twinx()
+        ax2.plot(signs_array,color="red")
         plt.show()
-        pass
-    pass
+
+        # Pack data into dataframe and return
+        df['x'] = pyro_data[dt:,0]
+        df['y'] = pyro_data[dt:,1]
+        df['intensity'] = pyro_data[dt:,2]
+        df['velocity'] = velocity_array_smoothed_mmps
+        df['threshold'] = signs_array
+    return df
 
 def display_image(image):
     """
@@ -164,6 +203,29 @@ def display_image(image):
     """
     pylab.imshow(image, cmap="Greys_r", vmin=0, vmax=255)
     pylab.show()
+
+def bit2mm(x, y, fieldsize=600, sl2=True):
+    """
+    Transform two arrays x,y of distance data from bit to mm
+    """
+    x_mm = x
+    y_mm = y
+
+    if sl2:
+
+        scaling = (float(fieldsize) / 2.0) / 524287.0  # The scaling according to the protocol (20 bits, signed).
+
+        x_mm = - x * scaling
+        y_mm = y * scaling
+
+    else:
+
+        scaling = float(fieldsize) / 32768.0  # The scaling according to the protocol (16 bits, signed).
+
+        x_mm = - (x + 16384) * scaling
+        y_mm = (y + 16384) * scaling
+
+    return (x_mm, y_mm)
 
 if __name__ == "__main__":
     
@@ -174,7 +236,7 @@ if __name__ == "__main__":
         if verbal == True:
             print("Started processing: " + file['filename_camera'])
             tstart = time.time()
-        #image_df = process_mkv(file)
+#        image_df = process_mkv(file)
         if verbal:
             print("Process finished in {0} seconds".format(time.time()-tstart))
         pass
@@ -190,6 +252,11 @@ if __name__ == "__main__":
             print("Process finished in {0} seconds".format(time.time()-tstart))
 
 
+#        fig, ax = plt.subplots()
+#        ax.plot(pyro1_df['threshold'],color="blue")
+#        ax2 = ax.twinx()
+#        ax2.plot(image_df['threshold'],color="red")
+#        plt.show()
         # todo: fit pyro & CMOS data
 
     # todo: store CMOS image table
