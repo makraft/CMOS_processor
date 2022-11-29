@@ -36,8 +36,8 @@ visual = [True,True,True, True, True]
 cherrypick = True
 # If set to true, specify which one
 cherry = {
-    "part" : "5",
-    "layer": "0-09"
+    "part" : "17",
+    "layer": "0-06"
 }
 
 
@@ -197,7 +197,7 @@ def process_pcd(file):
         Dy = np.diff(pyro_data[:,1], dt).astype(np.float)
         Dx_mm, Dy_mm = bit2mm(Dx, Dy)
         velocity_array_mm = np.linalg.norm(np.stack((Dx_mm,Dy_mm), axis=1), axis=1) / dt
-        window_width = 50
+        window_width = 20
         velocity_array_smoothed_mm = np.convolve(velocity_array_mm, np.ones(window_width),mode='same') / window_width
         # Convert velocity from mm*100kHz to mm/s
         velocity_array_smoothed_mmps = velocity_array_smoothed_mm * 1e5
