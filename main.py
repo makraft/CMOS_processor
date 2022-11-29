@@ -23,10 +23,28 @@ Height = 300
 # Specify settings for evaluating the main script
 # The script prints what it's doing
 verbal = True
+# Plots are generated and shown for intermediate results
+visual = [True,True,True, True, True]
+# 0: threshold plot camera
+# 1: threshold plot pyrometer1
+# 2: combined threshold plot
+# 3: scatter plot of intensity @x,y position
+# 4: scatter plot of ON/OFF @x,y position
+
+# Tell program if it should only process one part/layer combination
+# Set True or False
+cherrypick = True
+# If set to true, specify which one
+cherry = {
+    "part" : "5",
+    "layer": "0-09"
+}
+
+
 # Set limit to reducing computing time for image processing. Default = None
 image_number_limit =None
 
-def create_file_list(job):
+def create_file_list(job, **kwargs):
     """
     Creates a list of dictionaries with data of and paths to individual part 
     files, based on the CMOS data.
@@ -35,20 +53,37 @@ def create_file_list(job):
     filename_camera_prefix = "Jobs/{0}/hsCamera/".format(job)
     filename_pyro1_prefix = "Jobs/{0}/2Pyrometer/pyrometer1/".format(job)
     filename_pyro2_prefix = "Jobs/{0}/2Pyrometer/pyrometer2/".format(job)
-    part_number_list = os.listdir(filename_camera_prefix)
-    for part_number in part_number_list:
-        layer_list = os.listdir(filename_camera_prefix + part_number)
-        for layer in layer_list:
-            filename_camera = filename_camera_prefix + part_number + "/" + layer
-            l_pyro = layer.split('.')[0].replace("-",".") + '.pcd'
-            filename_pyro1 = filename_pyro1_prefix + part_number + "/" + l_pyro
-            filename_pyro2 = filename_pyro2_prefix + part_number + "/" + l_pyro
-            file_dict ={'filename_camera':filename_camera,
-                'filename_pyro1': filename_pyro1,
-                'filename_pyro2': filename_pyro2,
-                'part_number':part_number,
-                'layer':layer.split('.')[0]}
-            file_list.append(file_dict)
+
+    # Check if only cherry picked files are requested or all job files
+    if kwargs.get('cherry', None) is not None:
+        part_number = kwargs.get("cherry")["part"]
+        layer = kwargs.get("cherry")["layer"]
+        filename_camera = filename_camera_prefix + part_number + "/" + layer + ".mkv"
+        l_pyro = layer.split('.')[0].replace("-",".") + '.pcd'
+        filename_pyro1 = filename_pyro1_prefix + part_number + "/" + l_pyro
+        filename_pyro2 = filename_pyro2_prefix + part_number + "/" + l_pyro
+        file_dict ={'filename_camera':filename_camera,
+            'filename_pyro1': filename_pyro1,
+            'filename_pyro2': filename_pyro2,
+            'part_number':part_number,
+            'layer':layer.split('.')[0]}
+        file_list.append(file_dict)
+    else:
+        part_number_list = os.listdir(filename_camera_prefix)
+        # Create a dictionary with file information for every single file
+        for part_number in part_number_list:
+            layer_list = os.listdir(filename_camera_prefix + part_number)
+            for layer in layer_list:
+                filename_camera = filename_camera_prefix + part_number + "/" + layer
+                l_pyro = layer.split('.')[0].replace("-",".") + '.pcd'
+                filename_pyro1 = filename_pyro1_prefix + part_number + "/" + l_pyro
+                filename_pyro2 = filename_pyro2_prefix + part_number + "/" + l_pyro
+                file_dict ={'filename_camera':filename_camera,
+                    'filename_pyro1': filename_pyro1,
+                    'filename_pyro2': filename_pyro2,
+                    'part_number':part_number,
+                    'layer':layer.split('.')[0]}
+                file_list.append(file_dict)
     return(file_list)
 
 def process_mkv(file):
@@ -119,23 +154,22 @@ def process_mkv(file):
     # Determine if below or above threshold
     signs_array = (np.sign(intensity_array - OFF_threshold) +1)/2
     
-#    fig, ax = plt.subplots()
-#    ax.plot(intensity_array,color="blue")
-#    plt.axhline(OFF_threshold, color="green")
-#    ax2 = ax.twinx()
-#    ax2.plot(signs_array,color="red")
-#    plt.show()
+    if visual[0]:
+        fig, ax = plt.subplots()
+        ax.plot(intensity_array,color="blue")
+        plt.axhline(OFF_threshold, color="green")
+        ax2 = ax.twinx()
+        ax2.plot(signs_array,color="red")
+        plt.show()
 
     df = pandas.DataFrame(index=image_index_array)
 #    df['image'] = image_array
+    # todo: (optional) store processed images
     df['intensity'] = intensity_array
     df['threshold'] = signs_array
     df['part'] = file['part_number']
     df['layer'] = file['layer']
     df['index'] = image_index_array
-#    a = df["intensity"].rolling(5).mean()
-#    plt.plot(a)
-#    plt.show()
     return df
 
 
@@ -175,20 +209,24 @@ def process_pcd(file):
         # check upper boundary
         signs_array_upper = (np.sign(scan_velocity_hatch_mmps + 200 - velocity_array_smoothed_mmps) +1)/2
         initial_high_speed = np.where(signs_array_upper < 1)
-        lower = initial_high_speed[0][0]        #Todo: handle exception where no initial high speed occurs
-        upper = initial_high_speed[0][1]
-        signs_array_upper[np.arange(lower-50,upper+21,1)] = 0
-        signs_array = np.multiply(signs_array_lower,  signs_array_upper)
+        try:
+            lower = initial_high_speed[0][0]        #Todo: handle exception where no initial high speed occurs
+            upper = initial_high_speed[0][1]
+            signs_array_upper[np.arange(lower-50,upper+21,1)] = 0
+            signs_array = np.multiply(signs_array_lower,  signs_array_upper)
+        except:
+            print("No initial high velocity in pyrometer data detected.")
 #        signs_array = (np.sign(velocity_array_smoothed_mmps - (scan_velocity_hatch_mmps -200)) + 
 #            np.sign(scan_velocity_hatch_mmps + 200 - velocity_array_smoothed_mmps) - 1)
 
 
-#        fig, ax = plt.subplots()
-#        ax.plot(velocity_array_smoothed_mmps,color="blue")
-#        plt.axhline(scan_velocity_hatch_mmps, color="green")
-#        ax2 = ax.twinx()
-#        ax2.plot(signs_array,color="red")
-#        plt.show()
+        if visual[1]:
+            fig, ax = plt.subplots()
+            ax.plot(velocity_array_smoothed_mmps,color="blue")
+            plt.axhline(scan_velocity_hatch_mmps, color="green")
+            ax2 = ax.twinx()
+            ax2.plot(signs_array,color="red")
+            plt.show()
 
         # Pack data into dataframe and return
         df['x'] = pyro_data[dt:,0]
@@ -223,12 +261,30 @@ def extend_CMOS_data(df_camera, df_pyro):
     df_camera['x'] = x_array
     df_camera['y'] = y_array
 
-
-    fig, ax = plt.subplots()
-    ax.plot(df_camera['index_pyro'],df_camera['threshold'],color="blue")
-    ax2 = ax.twinx()
-    ax2.plot(df_pyro['threshold'],color="red")
-    plt.show()
+    if visual[2]:
+        fig, ax = plt.subplots()
+        ax.plot(df_camera['index_pyro'],df_camera['threshold'],color="blue")
+        ax2 = ax.twinx()
+        ax2.plot(df_pyro['threshold'],color="red")
+        plt.show()
+    if visual[3]:
+        plt.title("LAYER NUMBER: {}".format(df_camera["layer"][1]))
+        plt.scatter(df_camera["x"], df_camera["y"], c=df_camera["intensity"],
+            cmap="inferno")
+        plt.show()
+    if visual[4]:
+        fig, ax = plt.subplots()
+        df_camera_ON = df_camera.loc[df_camera['threshold'] == 1.0]
+        df_camera_OFF = df_camera.loc[df_camera['threshold'] == 0.0]
+        ax.set_title("LAYER NUMBER: {} PART: {}".format(df_camera["layer"][1], df_camera["part"][1]))
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+        ax.scatter(df_camera_ON["x"], df_camera_ON["y"], c="darkorange", 
+            alpha=0.5, label="ON")
+        ax.scatter(df_camera_OFF["x"], df_camera_OFF["y"], c="slategray",
+            alpha=0.5, label="OFF")
+        ax.legend()
+        plt.show()
     return
 
 def display_image(image):
@@ -261,10 +317,11 @@ def bit2mm(x, y, fieldsize=600, sl2=True):
 
     return (x_mm, y_mm)
 
-if __name__ == "__main__":
-    
-    file_list = create_file_list(job_name)
-    # Load all CMOS images into an array
+def main():
+    if cherrypick:
+        file_list = create_file_list(job_name, cherry=cherry)
+    else:
+        file_list = create_file_list(job_name)
     for file in file_list:
         # Fetch and process images form the .mkv file
         if verbal == True:
@@ -275,8 +332,6 @@ if __name__ == "__main__":
             print("Process finished in {0} seconds".format(time.time()-tstart))
         pass
 
-        # todo: (optional) store processed CMOS images
-
         # Fetch and process pyro data from the .pcd file
         if verbal == True:
             print("Started processing: " + file['filename_pyro1'])
@@ -285,13 +340,8 @@ if __name__ == "__main__":
         if verbal:
             print("Process finished in {0} seconds".format(time.time()-tstart))
 
-
-#        fig, ax = plt.subplots()
-#        ax.plot(pyro1_df['threshold'],color="blue")
-#        ax2 = ax.twinx()
-#        ax2.plot(image_df['threshold'],color="red")
-#        plt.show()
-        # todo: fit pyro & CMOS data
+        # fit pyro & CMOS data
         extend_CMOS_data(image_df, pyro1_df)
 
-    # todo: store CMOS image table 
+if __name__ == "__main__":
+    main()
