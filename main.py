@@ -37,7 +37,7 @@ visual = [True,True,True,True,True]
 cherrypick = True
 # If set to true, specify which one
 cherry = {
-    "part" : "17",
+    "part" : "13",
     "layer": "0-06"
 }
 
@@ -250,6 +250,36 @@ def extend_CMOS_data(df_camera, df_pyro):
     Extend the CMOS camera dataframe with coordinates for each image, derived
     from the pyrometer data.
     """
+    # new implementation
+    off_interval = 3
+    camera_ON = np.where(df_camera['ON_OFF'] == 0)[0]
+    # calculate distance between ON images
+    camera_dist_on_on = np.diff(camera_ON)
+    # check where distance is corresponds to a minimal OFF-interval expected 
+    # between 2 scan vectors. The indice corresponds to the start of the
+    # interval.
+    camera_off_interval_start = np.where(camera_dist_on_on > off_interval + 1)[0]
+    camera_off_interval_length = camera_dist_on_on[camera_off_interval_start]
+    # find midpoints of intervals within the CMOS indices
+    camera_off_midpoints = np.round(camera_ON[camera_off_interval_start] + 1 +
+        camera_off_interval_length/2)
+    camera_num_scan_vectors = len(camera_off_interval_start) + 1
+
+    # do the same thing for the pyrometer data
+    pyro_ON = np.where(df_pyro['ON_OFF'] == 0)[0]
+    # calculate distance between ON images
+    pyro_dist_on_on = np.diff(pyro_ON)
+    # check where distance is corresponds to a minimal OFF-interval expected 
+    # between 2 scan vectors. The indice corresponds to the start of the
+    # interval.
+    # todo: change interval scaling to something physical
+    pyro_off_interval_start = np.where(pyro_dist_on_on > (off_interval + 1)*20)[0]
+    pyro_off_interval_length = pyro_dist_on_on[pyro_off_interval_start]
+    # find midpoints of intervals within the CMOS indices
+    pyro_off_midpoints = np.round(pyro_ON[pyro_off_interval_start] + 1 +
+        pyro_off_interval_length/2)
+    pyro_num_scan_vectors = len(pyro_off_interval_start) + 1
+
     camera_ON = np.where(df_camera['ON_OFF'] == 1)
     camera_ON_start = camera_ON[0][0]
     camera_ON_end = camera_ON[0][-1]
