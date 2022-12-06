@@ -24,7 +24,7 @@ Height = 300
 # The script prints what it's doing
 verbal = True
 # Plots are generated and shown for intermediate results
-visual = [False,False,False,False,False]
+visual = [True,True,True,True,True]
 # 0: threshold plot camera
 # 1: threshold plot pyrometer1
 # 2: combined threshold plot
@@ -93,6 +93,8 @@ def process_mkv(file):
     image_array = []
     image_index_array = []
     intensity_array = []
+    meltpool_area_array = []
+    image_area_array = []
 
 
     CMOS_video = imageio.get_reader(file['filename_camera'], 'ffmpeg')
@@ -104,6 +106,7 @@ def process_mkv(file):
     # Set a threshhold value to prevent melt pools from being classified as
     # noise.
     noise_threshold_value = 23
+    meltpool_threshold_value = 23
     # Create an empty noise mask which is subtracted from all pictures.
     noise_mask = np.full([y_max-y_min,x_max-x_min],0)
     noise_picture_total = 0
@@ -139,8 +142,18 @@ def process_mkv(file):
         image_min_noise[image_min_noise < 0] = 0
         image_array[index] = image_min_noise.astype(np.uint8)
         # calculate total intensity
-        intensity_array.append(np.sum(image_array[index]))
-        # todo: calculate melt pool area
+        intensity_array.append(np.sum(image_min_noise))
+
+        # calculate melt pool area
+        image_area = image_min_noise
+        image_area[image_area< meltpool_threshold_value] = 0
+        image_area[image_area>= meltpool_threshold_value] = 1
+        meltpool_area = np.sum(image_area)
+        meltpool_area_array.append(meltpool_area)
+        # compute a melt pool image based on the area calculation
+        meltpool_image = image_area * 255
+        image_area_array.append(meltpool_image)
+
     intensity_array = np.array(intensity_array, dtype=np.int64)
 
 
@@ -158,16 +171,18 @@ def process_mkv(file):
     if visual[0]:
         # todo: make graphs look nice
         fig, ax = plt.subplots()
-        ax.plot(intensity_array,color="blue")
-        plt.axhline(OFF_threshold, color="green")
+        ax.plot(meltpool_area_array,color="blue")
+        #plt.axhline(OFF_threshold, color="green")
         ax2 = ax.twinx()
         ax2.plot(signs_array,color="red")
         plt.show()
 
     df = pandas.DataFrame(index=image_index_array)
 #    df['image'] = image_array
+#    df['image_area'] = image_area_array
     # todo: (optional) store processed images
     df['intensity'] = intensity_array
+    df['meltpool_area'] = meltpool_area_array
     df['threshold'] = signs_array
     df['part'] = file['part_number']
     df['layer'] = file['layer']
