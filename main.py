@@ -11,6 +11,7 @@ import pylab
 import time
 import pandas
 import matplotlib.pyplot as plt
+import pickle
 
 # Edit this line to select the job to be processed
 job_name = "B002"
@@ -36,7 +37,7 @@ visual = [True,True,True,True,True]
 cherrypick = True
 # If set to true, specify which one
 cherry = {
-    "part" : "13",
+    "part" : "18",
     "layer": "0-06"
 }
 
@@ -168,22 +169,19 @@ def process_mkv(file):
     # Determine if below or above threshold
     signs_array = (np.sign(intensity_array - OFF_threshold) +1)/2
     
-    if visual[0]:
-        # todo: make graphs look nice
-        fig, ax = plt.subplots()
-        ax.plot(meltpool_area_array,color="blue")
-        #plt.axhline(OFF_threshold, color="green")
-        ax2 = ax.twinx()
-        ax2.plot(signs_array,color="red")
-        plt.show()
-
+    # store processed images as a python pickle file
+    df_images = pandas.DataFrame(index=image_index_array)
+    df_images['image'] = image_array
+    df_images['image_area'] = image_area_array
+    filename_pkl = file['filename_camera'].replace(".mkv",".pkl")
+    df_images.to_pickle(filename_pkl)
+    
+    # create dataframe that is returned
     df = pandas.DataFrame(index=image_index_array)
-#    df['image'] = image_array
-#    df['image_area'] = image_area_array
-    # todo: (optional) store processed images
     df['intensity'] = intensity_array
     df['meltpool_area'] = meltpool_area_array
-    df['threshold'] = signs_array
+    df['ON_OFF'] = signs_array
+    df['threshold'] = OFF_threshold
     df['part'] = file['part_number']
     df['layer'] = file['layer']
     df['index'] = image_index_array
@@ -227,31 +225,23 @@ def process_pcd(file):
         signs_array_upper = (np.sign(scan_velocity_hatch_mmps + 200 - velocity_array_smoothed_mmps) +1)/2
         initial_high_speed = np.where(signs_array_upper < 1)
         try:
-            lower = initial_high_speed[0][0]        #Todo: handle exception where no initial high speed occurs
+            lower = initial_high_speed[0][0]
             upper = initial_high_speed[0][1]
             signs_array_upper[np.arange(lower-50,upper+21,1)] = 0
             signs_array = np.multiply(signs_array_lower,  signs_array_upper)
         except:
             print("No initial high velocity in pyrometer data detected.")
+            # todo: properly handle this case
 #        signs_array = (np.sign(velocity_array_smoothed_mmps - (scan_velocity_hatch_mmps -200)) + 
 #            np.sign(scan_velocity_hatch_mmps + 200 - velocity_array_smoothed_mmps) - 1)
-
-
-        if visual[1]:
-        # todo: make graphs look nice
-            fig, ax = plt.subplots()
-            ax.plot(velocity_array_smoothed_mmps,color="blue")
-            plt.axhline(scan_velocity_hatch_mmps, color="green")
-            ax2 = ax.twinx()
-            ax2.plot(signs_array,color="red")
-            plt.show()
 
         # Pack data into dataframe and return
         df['x'] = pyro_data[dt:,0]
         df['y'] = pyro_data[dt:,1]
         df['intensity'] = pyro_data[dt:,2]
         df['velocity'] = velocity_array_smoothed_mmps
-        df['threshold'] = signs_array
+        df['ON_OFF'] = signs_array
+        df['threshold'] = scan_velocity_hatch_mmps
     return df
 
 
@@ -260,10 +250,10 @@ def extend_CMOS_data(df_camera, df_pyro):
     Extend the CMOS camera dataframe with coordinates for each image, derived
     from the pyrometer data.
     """
-    camera_ON = np.where(df_camera['threshold'] == 1)
+    camera_ON = np.where(df_camera['ON_OFF'] == 1)
     camera_ON_start = camera_ON[0][0]
     camera_ON_end = camera_ON[0][-1]
-    pyro_ON = np.where(df_pyro['threshold'] == 1)
+    pyro_ON = np.where(df_pyro['ON_OFF'] == 1)
     pyro_ON_start = pyro_ON[0][0]
     pyro_ON_end = pyro_ON[0][-1]
     # compute linear scaling factors
@@ -291,26 +281,81 @@ def extend_CMOS_data(df_camera, df_pyro):
     #todo: plot melt pool area vs. pyrometer value
     #todo: plot CMOS 2D and pyro-value 2D
 
-    if visual[2]:
-        # todo: make graphs look nice (labeling, scaling, units)
+    return
+
+
+def plot_data(df_camera, df_pyro, selection):
+    """
+    Generate plots from the data generated during the sensor data processing.
+    """
+    part = df_camera["part"][1]
+    layer = df_camera["layer"][1]
+    if selection[0]:
+        # Plot the results of the CMOS ON/OFF detection
         fig, ax = plt.subplots()
-        ax.plot(df_camera['index_pyro'],df_camera['threshold'],color="blue")
+        line1 = ax.plot(df_camera["intensity"],color="cornflowerblue",label="intensity")
+        line2 = ax.axhline(df_camera["threshold"][1], color="navy",label="intensity threshold")
+        ax.set_ylabel("Intensity")
+        ax.set_xlabel("image number")
         ax2 = ax.twinx()
-        ax2.plot(df_pyro['threshold'],color="red")
+        line3 = ax2.plot(df_camera["ON_OFF"],color="orangered",label="ON / OFF")
+        ax2.set_ylabel("OFF / ON")
+        # These lines are required to get one combined legend
+        line_sum = line1 + [line2] + line3
+        labels = [line.get_label() for line in line_sum]
+        ax.legend(line_sum, labels, loc=0)
+        ax.set_title("ON/OFF detection of CMOS image: " +
+            "PART {} | LAYER NUMBER {}".format(part, layer))
         plt.show()
-    if visual[3]:
-        # todo: make graphs look nice
-        plt.title("LAYER NUMBER: {}".format(df_camera["layer"][1]))
-        plt.scatter(df_camera["x"], df_camera["y"], c=df_camera["intensity"],
+    if selection[1]:
+        # Plot the results of the pyro velocity ON/OFF detection
+        fig, ax = plt.subplots()
+        line1 = ax.plot(df_pyro["velocity"],color="cornflowerblue",label="velocity")
+        line2 = ax.axhline(df_pyro["threshold"][1], color="navy",label="velocity_threshold")
+        ax.set_ylabel("Velocity")
+        ax.set_xlabel("measurement number")
+        ax2 = ax.twinx()
+        line3 = ax2.plot(df_pyro["ON_OFF"],color="orangered",label="ON / OFF")
+        ax2.set_ylabel("OFF / ON")
+        # These lines are required to get one combined legend
+        line_sum = line1 + [line2] + line3
+        labels = [line.get_label() for line in line_sum]
+        ax.legend(line_sum, labels, loc=0)
+        ax.set_title("ON/OFF detection of pyro velocity: " +
+            "PART {} | LAYER NUMBER {}".format(part, layer))
+        plt.show()
+    if selection[2]:
+        # Compare the results from the two ON/OFF detections
+        fig, ax = plt.subplots()
+        line1 = ax.plot(df_camera['index_pyro'],df_camera['ON_OFF'],color="navy",label="CMOS camera")
+        ax.set_ylabel("OFF / ON")
+        ax.set_xlabel("pyrometer measurement index")
+        ax2 = ax.twinx()
+        line2 = ax2.plot(df_pyro['ON_OFF'],color="orangered",label="pyrometer 1")
+        ax2.set_ylabel("OFF / ON")
+        # These lines are required to get one combined legend
+        line_sum = line1 + line2
+        labels = [line.get_label() for line in line_sum]
+        ax.legend(line_sum, labels, loc=0)
+        ax.set_title("ON/OFF detection comparison: " +
+            "PART {} | LAYER NUMBER {}".format(part, layer))
+        plt.show()
+    if selection[3]:
+        # show images at their x & y positions with their intensity
+        # todo: x,y scaling, units
+        fig, ax = plt.subplots()
+        ax.scatter(df_camera["x"], df_camera["y"], c=df_camera["intensity"],
             cmap="inferno")
+        ax.set_title("CMOS image position with image intensity: " +
+            "PART {} | LAYER NUMBER {}".format(part, layer))
         plt.show()
-    if visual[4]:
-        # todo: make graphs look nice
+    if selection[4]:
+        # show images at their x & y positions with ON / OFF detection
+        # todo: x,y scaling, units
         # todo: include uncertainty in alignment
         fig, ax = plt.subplots()
-        df_camera_ON = df_camera.loc[df_camera['threshold'] == 1.0]
-        df_camera_OFF = df_camera.loc[df_camera['threshold'] == 0.0]
-        ax.set_title("LAYER NUMBER: {} PART: {}".format(df_camera["layer"][1], df_camera["part"][1]))
+        df_camera_ON = df_camera.loc[df_camera['ON_OFF'] == 1.0]
+        df_camera_OFF = df_camera.loc[df_camera['ON_OFF'] == 0.0]
         ax.set_xlabel("x")
         ax.set_ylabel("y")
         ax.scatter(df_camera_ON["x"], df_camera_ON["y"], c="darkorange", 
@@ -318,8 +363,10 @@ def extend_CMOS_data(df_camera, df_pyro):
         ax.scatter(df_camera_OFF["x"], df_camera_OFF["y"], c="slategray",
             alpha=0.5, label="OFF")
         ax.legend()
+        ax.set_title("CMOS image position with ON/OFF detection: " +
+            "PART {} | LAYER NUMBER {}".format(part, layer))
         plt.show()
-    return
+
 
 def display_image(image):
     """
@@ -357,6 +404,7 @@ def main():
     else:
         file_list = create_file_list(job_name)
     for file in file_list:
+        # todo: check if processed files are available as .pkl files
         # Fetch and process images form the .mkv file
         if verbal == True:
             print("Started processing: " + file['filename_camera'])
@@ -376,6 +424,8 @@ def main():
 
         # fit pyro & CMOS data
         extend_CMOS_data(image_df, pyro1_df)
+        # plot results
+        plot_data(image_df,pyro1_df,visual)
 
 if __name__ == "__main__":
     main()
