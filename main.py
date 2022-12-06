@@ -1,6 +1,6 @@
 """
 Transform data from the Aconity CMOS high speed camera and assign machine
-coordinates by utilizing date from the pyrometers.
+coordinates by utilizing data from the pyrometers.
 """
 import csv
 import statistics
@@ -37,7 +37,7 @@ visual = [True,True,True,True,True]
 cherrypick = True
 # If set to true, specify which one
 cherry = {
-    "part" : "18",
+    "part" : "17",
     "layer": "0-06"
 }
 
@@ -143,7 +143,7 @@ def process_mkv(file):
         image_min_noise[image_min_noise < 0] = 0
         image_array[index] = image_min_noise.astype(np.uint8)
         # calculate total intensity
-        intensity_array.append(np.sum(image_min_noise))
+        intensity_array.append(np.sum(image_array[index]))
 
         # calculate melt pool area
         image_area = image_min_noise
