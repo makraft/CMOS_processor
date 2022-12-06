@@ -24,25 +24,25 @@ Height = 300
 # The script prints what it's doing
 verbal = True
 # Plots are generated and shown for intermediate results
-visual = [True,True,True, True, True]
+visual = [False,False,False,False,False]
 # 0: threshold plot camera
 # 1: threshold plot pyrometer1
 # 2: combined threshold plot
 # 3: scatter plot of intensity @x,y position
 # 4: scatter plot of ON/OFF @x,y position
 
-# Tell program if it should only process one part/layer combination
+# Tell program if it should only process one selected part/layer combination
 # Set True or False
 cherrypick = True
 # If set to true, specify which one
 cherry = {
-    "part" : "17",
+    "part" : "13",
     "layer": "0-06"
 }
 
-
-# Set limit to reducing computing time for image processing. Default = None
+# Set limit to reduce computing time for image processing. Default = None
 image_number_limit =None
+
 
 def create_file_list(job, **kwargs):
     """
@@ -140,6 +140,7 @@ def process_mkv(file):
         image_array[index] = image_min_noise.astype(np.uint8)
         # calculate total intensity
         intensity_array.append(np.sum(image_array[index]))
+        # todo: calculate melt pool area
     intensity_array = np.array(intensity_array, dtype=np.int64)
 
 
@@ -155,6 +156,7 @@ def process_mkv(file):
     signs_array = (np.sign(intensity_array - OFF_threshold) +1)/2
     
     if visual[0]:
+        # todo: make graphs look nice
         fig, ax = plt.subplots()
         ax.plot(intensity_array,color="blue")
         plt.axhline(OFF_threshold, color="green")
@@ -221,6 +223,7 @@ def process_pcd(file):
 
 
         if visual[1]:
+        # todo: make graphs look nice
             fig, ax = plt.subplots()
             ax.plot(velocity_array_smoothed_mmps,color="blue")
             plt.axhline(scan_velocity_hatch_mmps, color="green")
@@ -260,19 +263,35 @@ def extend_CMOS_data(df_camera, df_pyro):
         y_array.append(df_pyro.at[int(index_pyro),'y'],)
     df_camera['x'] = x_array
     df_camera['y'] = y_array
+    
+    #todo: improve matching by:
+    #todo: 1. counting number of vectors for both sensors
+    #todo: 2. delete/unify short pyro vectors
+    #todo: 3. compare vectors of both sensors in length and number
+    #todo: 4. scale pyro time on a vector basis
+
+    #todo: give measure for quality from:
+    #todo: 1 number of vectors
+    #todo: 2 plot distribution of scaling factors compared to vector length
+    #todo: plot melt pool area vs. pyrometer value
+    #todo: plot CMOS 2D and pyro-value 2D
 
     if visual[2]:
+        # todo: make graphs look nice (labeling, scaling, units)
         fig, ax = plt.subplots()
         ax.plot(df_camera['index_pyro'],df_camera['threshold'],color="blue")
         ax2 = ax.twinx()
         ax2.plot(df_pyro['threshold'],color="red")
         plt.show()
     if visual[3]:
+        # todo: make graphs look nice
         plt.title("LAYER NUMBER: {}".format(df_camera["layer"][1]))
         plt.scatter(df_camera["x"], df_camera["y"], c=df_camera["intensity"],
             cmap="inferno")
         plt.show()
     if visual[4]:
+        # todo: make graphs look nice
+        # todo: include uncertainty in alignment
         fig, ax = plt.subplots()
         df_camera_ON = df_camera.loc[df_camera['threshold'] == 1.0]
         df_camera_OFF = df_camera.loc[df_camera['threshold'] == 0.0]
