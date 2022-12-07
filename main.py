@@ -37,7 +37,7 @@ visual = [True,True,True,True,True]
 cherrypick = True
 # If set to true, specify which one
 cherry = {
-    "part" : "5",
+    "part" : "17",
     "layer": "0-06"
 }
 
@@ -230,10 +230,8 @@ def process_pcd(file):
             signs_array_upper[np.arange(lower-50,upper+71,1)] = 0
             signs_array = np.multiply(signs_array_lower,  signs_array_upper)
         except:
-            print("No initial high velocity in pyrometer data detected.")
-            # todo: properly handle this case
-#        signs_array = (np.sign(velocity_array_smoothed_mmps - (scan_velocity_hatch_mmps -200)) + 
-#            np.sign(scan_velocity_hatch_mmps + 200 - velocity_array_smoothed_mmps) - 1)
+            print("Warning: No initial high velocity in pyrometer data detected.")
+            signs_array = np.multiply(signs_array_lower,  signs_array_upper)
 
         # Pack data into dataframe and return
         df['x'] = pyro_data[dt:,0]
@@ -282,7 +280,44 @@ def extend_CMOS_data(df_camera, df_pyro):
     pyro_num_scan_vectors = len(pyro_off_interval_start) + 1
 
     print("DETECTED MIDPOINTS: CAMERA={}  PYRO={}".format(camera_num_scan_vectors,pyro_num_scan_vectors))
-#    assert camera_num_scan_vectors == pyro_num_scan_vectors, "number of detected scan vectors is not equal"
+    df_camera['index_pyro'] = np.nan
+    if camera_num_scan_vectors == pyro_num_scan_vectors:
+        print("Midpoint numbers match, do pointwise scaling")
+        # Linearly scale the CMOS timescales between each midpoint interval
+        for index, camera_midpoint in enumerate(camera_off_midpoints[:-1]):
+            camera_start = camera_midpoint
+            camera_end = camera_off_midpoints[index+1]
+            pyro_start = pyro_off_midpoints[index]
+            pyro_end = pyro_off_midpoints[index+1]
+            slope = (pyro_end - pyro_start)/(camera_end - camera_start)
+            # get offset from end points since they are more accurate than start
+            offset = pyro_end - slope*camera_end
+            df_camera['index_pyro'][int(camera_start):int(camera_end)] = df_camera['index'][int(camera_start):int(camera_end)] * slope + offset
+        # Linearly scale all images outside the midpoints
+        camera_start = camera_off_midpoints[0]
+        camera_end = camera_off_midpoints[-1]
+        pyro_start = pyro_off_midpoints[0]
+        pyro_end = pyro_off_midpoints[-1]
+        slope = (pyro_end - pyro_start)/(camera_end - camera_start)
+        offset = pyro_end - slope*camera_end
+        df_camera['index_pyro'][:int(camera_start)] = df_camera['index'][:int(camera_start)] * slope + offset
+        df_camera['index_pyro'][int(camera_end):] = df_camera['index'][int(camera_end):] * slope + offset
+        # round values to the closest index
+        df_camera['index_pyro'] = df_camera['index_pyro'].round()
+    else:
+        print("Midpoint numbers do not match, do simple linear scaling")
+        # Linearly scale the entire CMOS timescale
+        camera_ON = np.where(df_camera['ON_OFF'] == 1)
+        camera_ON_start = camera_ON[0][0]
+        camera_ON_end = camera_ON[0][-1]
+        pyro_ON = np.where(df_pyro['ON_OFF'] == 1)
+        pyro_ON_start = pyro_ON[0][0]
+        pyro_ON_end = pyro_ON[0][-1]
+        # compute linear scaling factors
+        slope = (pyro_ON_end - pyro_ON_start)/(camera_ON_end - camera_ON_start)
+        offset = pyro_ON_end - slope * camera_ON_end
+        df_camera['index_pyro'] = df_camera['index'] * slope + offset
+        df_camera['index_pyro'] = df_camera['index_pyro'].round()
 
     fig, ax = plt.subplots()
     line1 = ax.plot(df_camera["intensity"],color="cornflowerblue",label="intensity")
@@ -304,18 +339,6 @@ def extend_CMOS_data(df_camera, df_pyro):
     line3 = ax.scatter(x,y,c="green")
     plt.show()
 
-    # todo: switch to this function for contour scans
-    camera_ON = np.where(df_camera['ON_OFF'] == 1)
-    camera_ON_start = camera_ON[0][0]
-    camera_ON_end = camera_ON[0][-1]
-    pyro_ON = np.where(df_pyro['ON_OFF'] == 1)
-    pyro_ON_start = pyro_ON[0][0]
-    pyro_ON_end = pyro_ON[0][-1]
-    # compute linear scaling factors
-    slope = (pyro_ON_end - pyro_ON_start)/(camera_ON_end - camera_ON_start)
-    offset = pyro_ON_end - slope * camera_ON_end
-    df_camera['index_pyro'] = df_camera['index'] * slope + offset
-    df_camera['index_pyro'] = df_camera['index_pyro'].round()
     x_array = []
     y_array = []
     for index_pyro in df_camera['index_pyro']:
@@ -325,15 +348,13 @@ def extend_CMOS_data(df_camera, df_pyro):
     df_camera['y'] = y_array
     
     #todo: improve matching by:
-    #todo: 1. counting number of vectors for both sensors
     #todo: 2. delete/unify short pyro vectors
     #todo: 3. compare vectors of both sensors in length and number
     #todo: 4. scale pyro time on a vector basis
 
     #todo: give measure for quality from:
     #todo: 1 number of vectors
-    #todo: 2 plot distribution of scaling factors compared to vector length
-    #todo: plot melt pool area vs. pyrometer value
+    #todo: 2 plot distribution of scaling factors compared to vector length #todo: plot melt pool area vs. pyrometer value
     #todo: plot CMOS 2D and pyro-value 2D
 
     return
