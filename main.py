@@ -37,7 +37,7 @@ visual = [True,True,True,True,True]
 cherrypick = True
 # If set to true, specify which one
 cherry = {
-    "part" : "13",
+    "part" : "5",
     "layer": "0-06"
 }
 
@@ -222,12 +222,12 @@ def process_pcd(file):
         # check lower boundary
         signs_array_lower = (np.sign(velocity_array_smoothed_mmps - (scan_velocity_hatch_mmps -200)) + 1)/2
         # check upper boundary
-        signs_array_upper = (np.sign(scan_velocity_hatch_mmps + 200 - velocity_array_smoothed_mmps) +1)/2
-        initial_high_speed = np.where(signs_array_upper < 1)
+        signs_array_upper = (np.sign(scan_velocity_hatch_mmps + 300 - velocity_array_smoothed_mmps) +1)/2
+        initial_high_speed = np.where(signs_array_upper < 1)[0]
         try:
-            lower = initial_high_speed[0][0]
-            upper = initial_high_speed[0][1]
-            signs_array_upper[np.arange(lower-50,upper+21,1)] = 0
+            lower = initial_high_speed[0]
+            upper = initial_high_speed[-1]
+            signs_array_upper[np.arange(lower-50,upper+71,1)] = 0
             signs_array = np.multiply(signs_array_lower,  signs_array_upper)
         except:
             print("No initial high velocity in pyrometer data detected.")
@@ -251,14 +251,14 @@ def extend_CMOS_data(df_camera, df_pyro):
     from the pyrometer data.
     """
     # new implementation
-    off_interval = 3
-    camera_ON = np.where(df_camera['ON_OFF'] == 0)[0]
+    camera_off_interval = 4
+    camera_ON = np.where(df_camera['ON_OFF'] == 1)[0]
     # calculate distance between ON images
     camera_dist_on_on = np.diff(camera_ON)
     # check where distance is corresponds to a minimal OFF-interval expected 
     # between 2 scan vectors. The indice corresponds to the start of the
     # interval.
-    camera_off_interval_start = np.where(camera_dist_on_on > off_interval + 1)[0]
+    camera_off_interval_start = np.where(camera_dist_on_on >= camera_off_interval)[0]
     camera_off_interval_length = camera_dist_on_on[camera_off_interval_start]
     # find midpoints of intervals within the CMOS indices
     camera_off_midpoints = np.round(camera_ON[camera_off_interval_start] + 1 +
@@ -266,20 +266,45 @@ def extend_CMOS_data(df_camera, df_pyro):
     camera_num_scan_vectors = len(camera_off_interval_start) + 1
 
     # do the same thing for the pyrometer data
-    pyro_ON = np.where(df_pyro['ON_OFF'] == 0)[0]
-    # calculate distance between ON images
+    # todo: change interval scaling to something physical
+    pyro_off_interval = 40
+    pyro_ON = np.where(df_pyro['ON_OFF'] == 1)[0]
+    # calculate distance between ON data points
     pyro_dist_on_on = np.diff(pyro_ON)
     # check where distance is corresponds to a minimal OFF-interval expected 
     # between 2 scan vectors. The indice corresponds to the start of the
     # interval.
-    # todo: change interval scaling to something physical
-    pyro_off_interval_start = np.where(pyro_dist_on_on > (off_interval + 1)*20)[0]
+    pyro_off_interval_start = np.where(pyro_dist_on_on >= pyro_off_interval)[0]
     pyro_off_interval_length = pyro_dist_on_on[pyro_off_interval_start]
-    # find midpoints of intervals within the CMOS indices
+    # find midpoints of intervals within the pyrometer indices
     pyro_off_midpoints = np.round(pyro_ON[pyro_off_interval_start] + 1 +
         pyro_off_interval_length/2)
     pyro_num_scan_vectors = len(pyro_off_interval_start) + 1
 
+    print("DETECTED MIDPOINTS: CAMERA={}  PYRO={}".format(camera_num_scan_vectors,pyro_num_scan_vectors))
+#    assert camera_num_scan_vectors == pyro_num_scan_vectors, "number of detected scan vectors is not equal"
+
+    fig, ax = plt.subplots()
+    line1 = ax.plot(df_camera["intensity"],color="cornflowerblue",label="intensity")
+    line2 = ax.axhline(df_camera["threshold"][1], color="navy",label="intensity threshold")
+    ax.set_ylabel("Intensity")
+    ax.set_xlabel("image number")
+    x = camera_off_midpoints
+    y = np.ones(len(x)) * df_camera['threshold'][1]
+    line3 = ax.scatter(x,y,c="green")
+    plt.show()
+
+    fig, ax = plt.subplots()
+    line1 = ax.plot(df_pyro["velocity"],color="cornflowerblue",label="velocity")
+    line2 = ax.axhline(df_pyro["threshold"][1], color="navy",label="velocity threshold")
+    ax.set_ylabel("Intensity")
+    ax.set_xlabel("image number")
+    x = pyro_off_midpoints
+    y = np.ones(len(x)) * df_pyro['threshold'][1]
+    line3 = ax.scatter(x,y,c="green")
+    plt.show()
+
+    # todo: switch to this function for contour scans
     camera_ON = np.where(df_camera['ON_OFF'] == 1)
     camera_ON_start = camera_ON[0][0]
     camera_ON_end = camera_ON[0][-1]
