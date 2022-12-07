@@ -248,7 +248,8 @@ def extend_CMOS_data(df_camera, df_pyro):
     Extend the CMOS camera dataframe with coordinates for each image, derived
     from the pyrometer data.
     """
-    # new implementation
+    # note: interval value comes from experimenting, is dependent on skywriting 
+    # strategy.
     camera_off_interval = 4
     camera_ON = np.where(df_camera['ON_OFF'] == 1)[0]
     # calculate distance between ON images
@@ -264,7 +265,8 @@ def extend_CMOS_data(df_camera, df_pyro):
     camera_num_scan_vectors = len(camera_off_interval_start) + 1
 
     # do the same thing for the pyrometer data
-    # todo: change interval scaling to something physical
+    # note: interval value comes from experimenting, is dependent on skywriting 
+    # strategy.
     pyro_off_interval = 40
     pyro_ON = np.where(df_pyro['ON_OFF'] == 1)[0]
     # calculate distance between ON data points
@@ -278,35 +280,43 @@ def extend_CMOS_data(df_camera, df_pyro):
     pyro_off_midpoints = np.round(pyro_ON[pyro_off_interval_start] + 1 +
         pyro_off_interval_length/2)
     pyro_num_scan_vectors = len(pyro_off_interval_start) + 1
+    # todo (optional): remove very short scan vectors from pyro vectors if the 
+    # camera is unable to recognize them.
 
     print("DETECTED MIDPOINTS: CAMERA={}  PYRO={}".format(camera_num_scan_vectors,pyro_num_scan_vectors))
     df_camera['index_pyro'] = np.nan
     if camera_num_scan_vectors == pyro_num_scan_vectors:
         print("Midpoint numbers match, do pointwise scaling")
-        # Linearly scale the CMOS timescales between each midpoint interval
+        # linearly scale the CMOS timescales between each midpoint interval
         for index, camera_midpoint in enumerate(camera_off_midpoints[:-1]):
             camera_start = camera_midpoint
             camera_end = camera_off_midpoints[index+1]
             pyro_start = pyro_off_midpoints[index]
             pyro_end = pyro_off_midpoints[index+1]
+            # compute linear scaling factors
             slope = (pyro_end - pyro_start)/(camera_end - camera_start)
-            # get offset from end points since they are more accurate than start
+            # get offset from end points since they tend to be more accurate 
+            # than start points
             offset = pyro_end - slope*camera_end
-            df_camera.loc[int(camera_start):int(camera_end),'index_pyro'] = df_camera.loc[int(camera_start):int(camera_end),'index'] * slope + offset
-        # Linearly scale all images outside the midpoints
+            df_camera.loc[ int(camera_start):int(camera_end),'index_pyro' ] = df_camera.loc[
+                int(camera_start):int(camera_end),'index'] * slope + offset
+        # linearly scale all images outside the midpoints
         camera_start = camera_off_midpoints[0]
         camera_end = camera_off_midpoints[-1]
         pyro_start = pyro_off_midpoints[0]
         pyro_end = pyro_off_midpoints[-1]
+        # compute linear scaling factors
         slope = (pyro_end - pyro_start)/(camera_end - camera_start)
         offset = pyro_end - slope*camera_end
-        df_camera.loc[:int(camera_start),'index_pyro'] = df_camera.loc[:int(camera_start),'index'] * slope + offset
-        df_camera.loc[int(camera_end):,'index_pyro'] = df_camera.loc[int(camera_end):,'index'] * slope + offset
+        df_camera.loc[:int(camera_start),'index_pyro'] = df_camera.loc[
+            :int(camera_start),'index'] * slope + offset
+        df_camera.loc[int(camera_end):,'index_pyro'] = df_camera.loc[
+            int(camera_end):,'index'] * slope + offset
         # round values to the closest index
         df_camera['index_pyro'] = df_camera['index_pyro'].round()
     else:
         print("Midpoint numbers do not match, do simple linear scaling")
-        # Linearly scale the entire CMOS timescale
+        # linearly scale the entire CMOS timescale
         camera_ON = np.where(df_camera['ON_OFF'] == 1)
         camera_ON_start = camera_ON[0][0]
         camera_ON_end = camera_ON[0][-1]
@@ -319,6 +329,7 @@ def extend_CMOS_data(df_camera, df_pyro):
         df_camera['index_pyro'] = df_camera['index'] * slope + offset
         df_camera['index_pyro'] = df_camera['index_pyro'].round()
 
+    # todo: integrate plots into existing ones
     fig, ax = plt.subplots()
     line1 = ax.plot(df_camera["intensity"],color="cornflowerblue",label="intensity")
     line2 = ax.axhline(df_camera["threshold"][1], color="navy",label="intensity threshold")
@@ -347,15 +358,17 @@ def extend_CMOS_data(df_camera, df_pyro):
     df_camera['x'] = x_array
     df_camera['y'] = y_array
     
-    #todo: improve matching by:
-    #todo: 2. delete/unify short pyro vectors
-    #todo: 3. compare vectors of both sensors in length and number
-    #todo: 4. scale pyro time on a vector basis
 
     #todo: give measure for quality from:
     #todo: 1 number of vectors
-    #todo: 2 plot distribution of scaling factors compared to vector length #todo: plot melt pool area vs. pyrometer value
+    #todo: 2 plot distribution of scaling factors compared to vector length 
+    #todo: extend above plot with lines for inaccuracies
+    #todo: plot melt pool area vs. pyrometer value
     #todo: plot CMOS 2D and pyro-value 2D
+    #todo: store dataframe
+    #todo: manual on how to access stored images from coordinates
+    
+
 
     return
 
@@ -448,6 +461,7 @@ def display_image(image):
     """
     Display an image. This is a function meant for debugging.
     """
+    # todo: normalize pixels in image to max intensity of a series of images
     pylab.imshow(image, cmap="Greys_r", vmin=0, vmax=255)
     pylab.show()
 
