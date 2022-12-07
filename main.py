@@ -292,7 +292,7 @@ def extend_CMOS_data(df_camera, df_pyro):
             slope = (pyro_end - pyro_start)/(camera_end - camera_start)
             # get offset from end points since they are more accurate than start
             offset = pyro_end - slope*camera_end
-            df_camera['index_pyro'][int(camera_start):int(camera_end)] = df_camera['index'][int(camera_start):int(camera_end)] * slope + offset
+            df_camera.loc[int(camera_start):int(camera_end),'index_pyro'] = df_camera.loc[int(camera_start):int(camera_end),'index'] * slope + offset
         # Linearly scale all images outside the midpoints
         camera_start = camera_off_midpoints[0]
         camera_end = camera_off_midpoints[-1]
@@ -300,8 +300,8 @@ def extend_CMOS_data(df_camera, df_pyro):
         pyro_end = pyro_off_midpoints[-1]
         slope = (pyro_end - pyro_start)/(camera_end - camera_start)
         offset = pyro_end - slope*camera_end
-        df_camera['index_pyro'][:int(camera_start)] = df_camera['index'][:int(camera_start)] * slope + offset
-        df_camera['index_pyro'][int(camera_end):] = df_camera['index'][int(camera_end):] * slope + offset
+        df_camera.loc[:int(camera_start),'index_pyro'] = df_camera.loc[:int(camera_start),'index'] * slope + offset
+        df_camera.loc[int(camera_end):,'index_pyro'] = df_camera.loc[int(camera_end):,'index'] * slope + offset
         # round values to the closest index
         df_camera['index_pyro'] = df_camera['index_pyro'].round()
     else:
