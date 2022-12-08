@@ -37,7 +37,7 @@ visual = [True,True,True,True,True]
 cherrypick = True
 # If set to true, specify which one
 cherry = {
-    "part" : "17",
+    "part" : "10",
     "layer": "0-06"
 }
 
@@ -248,6 +248,9 @@ def extend_CMOS_data(df_camera, df_pyro):
     Extend the CMOS camera dataframe with coordinates for each image, derived
     from the pyrometer data.
     """
+    # Create dictionary for results which do not fit in the df_camera or df_pyro
+    results = {}
+
     # note: interval value comes from experimenting, is dependent on skywriting 
     # strategy.
     camera_off_interval = 4
@@ -263,6 +266,10 @@ def extend_CMOS_data(df_camera, df_pyro):
     camera_off_midpoints = np.round(camera_ON[camera_off_interval_start] + 1 +
         camera_off_interval_length/2)
     camera_num_scan_vectors = len(camera_off_interval_start) + 1
+    results.update({
+        "camera_midpoints": camera_off_midpoints,
+        "camera_interval_length": camera_off_interval_length,
+        "camera_num_vectors": camera_num_scan_vectors})
 
     # do the same thing for the pyrometer data
     # note: interval value comes from experimenting, is dependent on skywriting 
@@ -282,6 +289,10 @@ def extend_CMOS_data(df_camera, df_pyro):
     pyro_num_scan_vectors = len(pyro_off_interval_start) + 1
     # todo (optional): remove very short scan vectors from pyro vectors if the 
     # camera is unable to recognize them.
+    results.update({
+        "pyro_midpoints": pyro_off_midpoints,
+        "pyro_interval_length": pyro_off_interval_length,
+        "pyro_num_vectors": pyro_num_scan_vectors})
 
     print("DETECTED MIDPOINTS: CAMERA={}  PYRO={}".format(camera_num_scan_vectors,pyro_num_scan_vectors))
     df_camera['index_pyro'] = np.nan
@@ -314,6 +325,7 @@ def extend_CMOS_data(df_camera, df_pyro):
             int(camera_end):,'index'] * slope + offset
         # round values to the closest index
         df_camera['index_pyro'] = df_camera['index_pyro'].round()
+        results.update({"method": "linear pointwise"})
     else:
         print("Midpoint numbers do not match, do simple linear scaling")
         # linearly scale the entire CMOS timescale
@@ -328,27 +340,8 @@ def extend_CMOS_data(df_camera, df_pyro):
         offset = pyro_ON_end - slope * camera_ON_end
         df_camera['index_pyro'] = df_camera['index'] * slope + offset
         df_camera['index_pyro'] = df_camera['index_pyro'].round()
+        results.update({"method": "linear single"})
 
-    # todo: integrate plots into existing ones
-    fig, ax = plt.subplots()
-    line1 = ax.plot(df_camera["intensity"],color="cornflowerblue",label="intensity")
-    line2 = ax.axhline(df_camera["threshold"][1], color="navy",label="intensity threshold")
-    ax.set_ylabel("Intensity")
-    ax.set_xlabel("image number")
-    x = camera_off_midpoints
-    y = np.ones(len(x)) * df_camera['threshold'][1]
-    line3 = ax.scatter(x,y,c="green")
-    plt.show()
-
-    fig, ax = plt.subplots()
-    line1 = ax.plot(df_pyro["velocity"],color="cornflowerblue",label="velocity")
-    line2 = ax.axhline(df_pyro["threshold"][1], color="navy",label="velocity threshold")
-    ax.set_ylabel("Intensity")
-    ax.set_xlabel("image number")
-    x = pyro_off_midpoints
-    y = np.ones(len(x)) * df_pyro['threshold'][1]
-    line3 = ax.scatter(x,y,c="green")
-    plt.show()
 
     x_array = []
     y_array = []
@@ -370,10 +363,10 @@ def extend_CMOS_data(df_camera, df_pyro):
     
 
 
-    return
+    return(df_camera, df_pyro, results)
 
 
-def plot_data(df_camera, df_pyro, selection):
+def plot_data(df_camera, df_pyro, results, selection):
     """
     Generate plots from the data generated during the sensor data processing.
     """
@@ -382,34 +375,34 @@ def plot_data(df_camera, df_pyro, selection):
     if selection[0]:
         # Plot the results of the CMOS ON/OFF detection
         fig, ax = plt.subplots()
-        line1 = ax.plot(df_camera["intensity"],color="cornflowerblue",label="intensity")
+        line1, = ax.plot(df_camera["intensity"],color="cornflowerblue",label="intensity")
         line2 = ax.axhline(df_camera["threshold"][1], color="navy",label="intensity threshold")
+        x = results["camera_midpoints"]
+        y = np.ones(len(x)) * df_camera['threshold'][1]
+        line3 = ax.scatter(x,y,c="green",label="midpoints")
         ax.set_ylabel("Intensity")
         ax.set_xlabel("image number")
         ax2 = ax.twinx()
-        line3 = ax2.plot(df_camera["ON_OFF"],color="orangered",label="ON / OFF")
+        line4, = ax2.plot(df_camera["ON_OFF"],color="orangered",label="ON / OFF")
         ax2.set_ylabel("OFF / ON")
-        # These lines are required to get one combined legend
-        line_sum = line1 + [line2] + line3
-        labels = [line.get_label() for line in line_sum]
-        ax.legend(line_sum, labels, loc=0)
+        ax.legend(handles=[line1,line2,line3,line4],loc=0)
         ax.set_title("ON/OFF detection of CMOS image: " +
             "PART {} | LAYER NUMBER {}".format(part, layer))
         plt.show()
     if selection[1]:
         # Plot the results of the pyro velocity ON/OFF detection
         fig, ax = plt.subplots()
-        line1 = ax.plot(df_pyro["velocity"],color="cornflowerblue",label="velocity")
+        line1, = ax.plot(df_pyro["velocity"],color="cornflowerblue",label="velocity")
         line2 = ax.axhline(df_pyro["threshold"][1], color="navy",label="velocity_threshold")
+        x = results["pyro_midpoints"]
+        y = np.ones(len(x)) * df_pyro['threshold'][1]
+        line3 = ax.scatter(x,y,c="darkgreen",label="midpoints")
         ax.set_ylabel("Velocity")
         ax.set_xlabel("measurement number")
         ax2 = ax.twinx()
-        line3 = ax2.plot(df_pyro["ON_OFF"],color="orangered",label="ON / OFF")
+        line4, = ax2.plot(df_pyro["ON_OFF"],color="orangered",label="ON / OFF")
         ax2.set_ylabel("OFF / ON")
-        # These lines are required to get one combined legend
-        line_sum = line1 + [line2] + line3
-        labels = [line.get_label() for line in line_sum]
-        ax.legend(line_sum, labels, loc=0)
+        ax.legend(handles=[line1,line2,line3,line4],loc=0)
         ax.set_title("ON/OFF detection of pyro velocity: " +
             "PART {} | LAYER NUMBER {}".format(part, layer))
         plt.show()
@@ -513,9 +506,9 @@ def main():
             print("Process finished in {0} seconds".format(time.time()-tstart))
 
         # fit pyro & CMOS data
-        extend_CMOS_data(image_df, pyro1_df)
+        image_df,pyro1_df,results = extend_CMOS_data(image_df, pyro1_df)
         # plot results
-        plot_data(image_df,pyro1_df,visual)
+        plot_data(image_df,pyro1_df,results, visual)
 
 if __name__ == "__main__":
     main()
