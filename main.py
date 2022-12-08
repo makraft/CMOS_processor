@@ -2,6 +2,7 @@
 Transform data from the Aconity CMOS high speed camera and assign machine
 coordinates by utilizing data from the pyrometers.
 """
+import math
 import csv
 import statistics
 import imageio
@@ -25,19 +26,20 @@ Height = 300
 # The script prints what it's doing
 verbal = True
 # Plots are generated and shown for intermediate results
-visual = [True,True,True,True,True]
-# 0: threshold plot camera
-# 1: threshold plot pyrometer1
-# 2: combined threshold plot
+visual = [True,True,True,True,True,True]
+# 0: ON/OFF plot camera
+# 1: ON/OFF plot pyrometer1
+# 2: combined ON/OFF plot
 # 3: scatter plot of intensity @x,y position
 # 4: scatter plot of ON/OFF @x,y position
+# 5: scatter plot of vector length vs. slope
 
 # Tell program if it should only process one selected part/layer combination
 # Set True or False
 cherrypick = True
 # If set to true, specify which one
 cherry = {
-    "part" : "10",
+    "part" : "13",
     "layer": "0-06"
 }
 
@@ -293,6 +295,10 @@ def extend_CMOS_data(df_camera, df_pyro):
         "pyro_midpoints": pyro_off_midpoints,
         "pyro_interval_length": pyro_off_interval_length,
         "pyro_num_vectors": pyro_num_scan_vectors})
+    results.update({"slopes":[]})
+    results.update({"slope_errors":[]})
+    results.update({"camera_delta":[]})
+    results.update({"pyro_delta":[]})
 
     print("DETECTED MIDPOINTS: CAMERA={}  PYRO={}".format(camera_num_scan_vectors,pyro_num_scan_vectors))
     df_camera['index_pyro'] = np.nan
@@ -305,7 +311,14 @@ def extend_CMOS_data(df_camera, df_pyro):
             pyro_start = pyro_off_midpoints[index]
             pyro_end = pyro_off_midpoints[index+1]
             # compute linear scaling factors
-            slope = (pyro_end - pyro_start)/(camera_end - camera_start)
+            camera_delta = camera_end-camera_start
+            pyro_delta = pyro_end-pyro_start
+            slope = (pyro_delta)/(camera_delta)
+            results["slopes"].append(slope)
+            slope_err = slope_error(camera_delta,pyro_delta)
+            results["slope_errors"].append(slope_err)
+            results["camera_delta"].append(camera_delta)
+            results["pyro_delta"].append(pyro_delta)
             # get offset from end points since they tend to be more accurate 
             # than start points
             offset = pyro_end - slope*camera_end
@@ -336,13 +349,20 @@ def extend_CMOS_data(df_camera, df_pyro):
         pyro_ON_start = pyro_ON[0][0]
         pyro_ON_end = pyro_ON[0][-1]
         # compute linear scaling factors
-        slope = (pyro_ON_end - pyro_ON_start)/(camera_ON_end - camera_ON_start)
+        camera_delta=camera_ON_end-camera_ON_start
+        pyro_delta=pyro_ON_end-pyro_ON_start
+        slope = (pyro_delta)/(camera_delta)
+        results["slopes"].append(slope)
+        slope_err = slope_error(camera_delta,pyro_delta)
+        results["slope_errors"].append(slope_err)
+        results["camera_delta"].append(camera_delta)
+        results["pyro_delta"].append(pyro_delta)
         offset = pyro_ON_end - slope * camera_ON_end
         df_camera['index_pyro'] = df_camera['index'] * slope + offset
         df_camera['index_pyro'] = df_camera['index_pyro'].round()
         results.update({"method": "linear single"})
 
-
+    # compute machine coordinates of each camera image
     x_array = []
     y_array = []
     for index_pyro in df_camera['index_pyro']:
@@ -352,10 +372,6 @@ def extend_CMOS_data(df_camera, df_pyro):
     df_camera['y'] = y_array
     
 
-    #todo: give measure for quality from:
-    #todo: 1 number of vectors
-    #todo: 2 plot distribution of scaling factors compared to vector length 
-    #todo: extend above plot with lines for inaccuracies
     #todo: plot melt pool area vs. pyrometer value
     #todo: plot CMOS 2D and pyro-value 2D
     #todo: store dataframe
@@ -365,6 +381,17 @@ def extend_CMOS_data(df_camera, df_pyro):
 
     return(df_camera, df_pyro, results)
 
+
+def slope_error(dc, dp):
+    """
+    Compute the error of the slope function. c = camera, p = pyrometer
+    """
+    delta_dc = 2
+    delta_dp = 1
+    dp_err = (1/dc)*delta_dp
+    dc_err = (dp/(dc**2))*(-1)*delta_dc
+    slope_err = math.sqrt(dp_err**2 + dc_err**2)
+    return(slope_err)
 
 def plot_data(df_camera, df_pyro, results, selection):
     """
@@ -449,10 +476,48 @@ def plot_data(df_camera, df_pyro, results, selection):
             "PART {} | LAYER NUMBER {}".format(part, layer))
         plt.show()
 
+    if selection[5]:
+        # plot vector length(camera delta) vs. slope as scatterplot
+        fig,ax = plt.subplots()
+#        ax.errorbar(results["camera_delta"],results["slopes"],
+#            yerr=results["slope_errors"],c="navy",label="scan vectors",fmt='o')
+        
+        # calculate the average slope
+        slope_total=0
+        weight_total=0
+        for index, slope in enumerate(results["slopes"]):
+            weight = results["camera_delta"][index]
+            slope_weighted = slope * weight
+            slope_total+=slope_weighted
+            weight_total+=weight
+        slope_average=slope_total/weight_total
+        # compute theoretical errors for each camera delta
+        camera_delta_all = range(int(min(results["camera_delta"])), 
+            int(max(results["camera_delta"]))+1, 1)
+        vector_error_all = []
+        for camera_delta in camera_delta_all:
+            pyro_delta=slope*camera_delta
+            vector_error_all.append(slope_error(camera_delta,pyro_delta))
+        # add errorbars to plot
+        ax.errorbar(camera_delta_all,
+            np.full(len(camera_delta_all), slope_average),
+            yerr=vector_error_all,c="orange",label="theoretical errors",
+            fmt='none',capsize=4)
+        # add data points to the plot
+        ax.scatter(results["camera_delta"],results["slopes"], c="navy",
+            label="scan vectors")
+        # show average slope value
+        ax.axhline(slope_average,color="orange",label="average scaling factor",
+            linestyle="--")
+        ax.set_xlabel("vector length [pyrometer data points]")
+        ax.set_ylabel("Scaling factor [pyrometer data points / CMOS image]")
+        ax.legend()
+        plt.show()
+
 
 def display_image(image):
     """
-    Display an image. This is a function meant for debugging.
+    Display an image. This is a helper function meant for debugging.
     """
     # todo: normalize pixels in image to max intensity of a series of images
     pylab.imshow(image, cmap="Greys_r", vmin=0, vmax=255)
