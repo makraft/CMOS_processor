@@ -461,7 +461,6 @@ def plot_data(df_camera, df_pyro, results, selection):
     if selection[4]:
         # show images at their x & y positions with ON / OFF detection
         # todo: x,y scaling, units
-        # todo: include uncertainty in alignment
         fig, ax = plt.subplots()
         df_camera_ON = df_camera.loc[df_camera['ON_OFF'] == 1.0]
         df_camera_OFF = df_camera.loc[df_camera['ON_OFF'] == 0.0]
