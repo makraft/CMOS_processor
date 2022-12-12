@@ -466,6 +466,7 @@ def plot_data(df_camera, df_pyro, results, selection):
         ax.xaxis.set_minor_locator(x_grid_locator)
         ax.yaxis.set_minor_locator(y_grid_locator)
         ax.grid(True,which='minor')
+        ax.axes.set_aspect('equal')
         plt.show()
     if selection[4]:
         # show images at their x & y positions with ON / OFF detection
