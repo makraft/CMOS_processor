@@ -12,6 +12,7 @@ import pylab
 import time
 import pandas
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MultipleLocator
 import pickle
 
 # Edit this line to select the job to be processed
@@ -452,10 +453,19 @@ def plot_data(df_camera, df_pyro, results, selection):
         # show images at their x & y positions with their intensity
         # todo: (prio 1)x,y scaling, units
         fig, ax = plt.subplots()
-        ax.scatter(df_camera["x"], df_camera["y"], c=df_camera["intensity"],
+        x,y = bit2mm(df_camera["x"], df_camera["y"])
+        ax.scatter(x, y, c=df_camera["intensity"],
             cmap="inferno")
         ax.set_title("CMOS image position with image intensity: " +
             "PART {} | LAYER NUMBER {}".format(part, layer))
+        ax.set_xlabel("x position [mm] in machine coordinates")
+        ax.set_ylabel("y position [mm] in machine coordinates")
+        spacing=1
+        x_grid_locator = MultipleLocator(spacing)
+        y_grid_locator = MultipleLocator(spacing)
+        ax.xaxis.set_minor_locator(x_grid_locator)
+        ax.yaxis.set_minor_locator(y_grid_locator)
+        ax.grid(True,which='minor')
         plt.show()
     if selection[4]:
         # show images at their x & y positions with ON / OFF detection
@@ -530,7 +540,6 @@ def plot_data(df_camera, df_pyro, results, selection):
             cmap="inferno")
         ax1.set_title("CMOS image position with image intensity: " +
             "PART {} | LAYER NUMBER {}".format(part, layer))
-        ax1.legend()
         ax2.scatter(df_pyro["x"], df_pyro["y"], c = df_pyro["intensity"],
             cmap="inferno")
         ax2.set_title("Pyrometer positions with measurement value: " +
