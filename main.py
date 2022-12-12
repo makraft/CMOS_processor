@@ -27,7 +27,7 @@ Height = 300
 # The script prints what it's doing
 verbal = True
 # Plots are generated and shown for intermediate results
-visual = [True,True,False,True,True,False,False,False]
+visual = [False,False,False,False,False,True,False,False]
 # 0: ON/OFF plot camera
 # 1: ON/OFF plot pyrometer1
 # 2: combined ON/OFF plot
@@ -42,7 +42,7 @@ visual = [True,True,False,True,True,False,False,False]
 cherrypick = True
 # If set to true, specify which one
 cherry = {
-    "part" : "18",
+    "part" : "5",
     "layer": "0-06"
 }
 
@@ -180,7 +180,7 @@ def process_mkv(file):
     df_images = pandas.DataFrame(index=image_index_array)
     df_images['image'] = image_array
     df_images['area_threshold'] = meltpool_threshold_value
-    df_images['brightests_pixel'] = np.max(brightest_pixel_array)
+    df_images['brightest_pixel'] = np.max(brightest_pixel_array)
     filename_pkl = file['filename_camera'].replace(".mkv",".pkl")
     df_images.to_pickle(filename_pkl)
     
@@ -392,7 +392,7 @@ def slope_error(dc, dp):
     """
     Compute the error of the slope function. c = camera, p = pyrometer
     """
-    delta_dc = 2
+    delta_dc = math.sqrt(2)
     delta_dp = 1
     dp_err = (1/dc)*delta_dp
     dc_err = (dp/(dc**2))*(-1)*delta_dc
@@ -420,7 +420,7 @@ def plot_data(df_camera, df_pyro, results, selection):
         ax2.set_ylabel("OFF / ON")
         ax.legend(handles=[line1,line2,line3,line4],loc=0)
         ax.set_title("ON/OFF detection of CMOS image: " +
-            "PART {} | LAYER NUMBER {}".format(part, layer))
+            "PART {} | LAYER {}".format(part, layer))
         plt.show()
     if selection[1]:
         # Plot the results of the pyro velocity ON/OFF detection
@@ -437,7 +437,7 @@ def plot_data(df_camera, df_pyro, results, selection):
         ax2.set_ylabel("OFF / ON")
         ax.legend(handles=[line1,line2,line3,line4],loc=0)
         ax.set_title("ON/OFF detection of pyro velocity: " +
-            "PART {} | LAYER NUMBER {}".format(part, layer))
+            "PART {} | LAYER {}".format(part, layer))
         plt.show()
     if selection[2]:
         # Compare the results from the two ON/OFF detections
@@ -453,7 +453,7 @@ def plot_data(df_camera, df_pyro, results, selection):
         labels = [line.get_label() for line in line_sum]
         ax.legend(line_sum, labels, loc=0)
         ax.set_title("ON/OFF detection comparison: " +
-            "PART {} | LAYER NUMBER {}".format(part, layer))
+            "PART {} | LAYER {}".format(part, layer))
         plt.show()
     if selection[3]:
         # show images at their x & y positions with their intensity
@@ -461,7 +461,7 @@ def plot_data(df_camera, df_pyro, results, selection):
         ax.scatter(df_camera["x_mm"], df_camera["y_mm"],c=df_camera["intensity"],
             cmap="inferno")
         ax.set_title("CMOS image position with image intensity: " +
-            "PART {} | LAYER NUMBER {}".format(part, layer))
+            "PART {} | LAYER {}".format(part, layer))
         ax.set_xlabel("x position [mm] in machine coordinates")
         ax.set_ylabel("y position [mm] in machine coordinates")
         spacing=1
@@ -483,9 +483,13 @@ def plot_data(df_camera, df_pyro, results, selection):
             alpha=0.5, label="ON")
         ax.scatter(df_camera_OFF["x_mm"], df_camera_OFF["y_mm"], c="slategray",
             alpha=0.5, label="OFF")
+#        ax.scatter(df_camera_ON["x_mm"][160], df_camera_ON["y_mm"][160], c="navy",label="# 160")
+#        ax.scatter(df_camera_ON["x_mm"][230], df_camera_ON["y_mm"][230], c="red",label="# 230")
+#        ax.scatter(df_camera_ON["x_mm"][300], df_camera_ON["y_mm"][300], c="green",label="# 300")
+#        ax.scatter(df_camera_ON["x_mm"][370], df_camera_ON["y_mm"][370], c="black",label="# 370")
         ax.legend()
         ax.set_title("CMOS image position with ON/OFF detection: " +
-            "PART {} | LAYER NUMBER {}".format(part, layer))
+            "PART {} | LAYER {}".format(part, layer))
         ax.set_xlabel("x position [mm] in machine coordinates")
         ax.set_ylabel("y position [mm] in machine coordinates")
         spacing=1
@@ -523,13 +527,13 @@ def plot_data(df_camera, df_pyro, results, selection):
         ax.errorbar(camera_delta_all,
             np.full(len(camera_delta_all), slope_average),
             yerr=vector_error_all,c="orange",label="theoretical errors",
-            fmt='none',capsize=4)
+            fmt='none',capsize=4,zorder=1)
         # add data points to the plot
         ax.scatter(results["camera_delta"],results["slopes"], c="navy",
-            label="scan vectors")
+            label="scan vectors",zorder=3)
         # show average slope value
         ax.axhline(slope_average,color="orange",label="average scaling factor",
-            linestyle="--")
+            linestyle="--",zorder=2)
         ax.set_xlabel("vector length [pyrometer data points]")
         ax.set_ylabel("Scaling factor [pyrometer data points / CMOS image]")
         ax.legend()
@@ -552,14 +556,14 @@ def plot_data(df_camera, df_pyro, results, selection):
         ax1.scatter(df_camera["x_mm"], df_camera["y_mm"], c=df_camera["intensity"],
             cmap="inferno")
         ax1.set_title("CMOS image position with image intensity: " +
-            "PART {} | LAYER NUMBER {}".format(part, layer))
+            "PART {} | LAYER {}".format(part, layer))
         ax1.set_xlabel("x position [mm] in machine coordinates")
         ax1.set_ylabel("y position [mm] in machine coordinates")
         x,y = bit2mm(df_pyro["x"], df_pyro["y"])
         ax2.scatter(x,y, c = df_pyro["intensity"],
             cmap="inferno")
         ax2.set_title("Pyrometer positions with measurement value: " +
-            "PART {} | LAYER NUMBER {}".format(part, layer))
+            "PART {} | LAYER {}".format(part, layer))
         ax2.set_xlabel("x position [mm] in machine coordinates")
         ax2.set_ylabel("y position [mm] in machine coordinates")
         spacing=1
