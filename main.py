@@ -26,13 +26,14 @@ Height = 300
 # The script prints what it's doing
 verbal = True
 # Plots are generated and shown for intermediate results
-visual = [True,True,True,True,True,True]
+visual = [False,False,False,True,True,True,False]
 # 0: ON/OFF plot camera
 # 1: ON/OFF plot pyrometer1
 # 2: combined ON/OFF plot
 # 3: scatter plot of intensity @x,y position
 # 4: scatter plot of ON/OFF @x,y position
 # 5: scatter plot of vector length vs. slope
+# 6: scatter plot of melt pool area vs. pyrometer value
 
 # Tell program if it should only process one selected part/layer combination
 # Set True or False
@@ -204,10 +205,6 @@ def process_pcd(file):
         scanner_field_correction_file = next(reader)
         pyro_data = np.array(list(reader)).astype(np.int64)
         assert np.sum(pyro_data[:,2]-pyro_data[:,3]) == 0, "The data in the two pyro value columns does not match"
-#        window_width = 10000
-#        intensity = np.convolve(pyro_data[:,2], np.ones(window_width), 'valid') / window_width
-#        plt.plot(intensity)
-#        plt.show()
         # Compute velocity profile
         dt = 1     # time interval for dx/dt, dy/dt
         Dx = np.diff(pyro_data[:,0], dt).astype(np.float)
@@ -235,6 +232,8 @@ def process_pcd(file):
             print("Warning: No initial high velocity in pyrometer data detected.")
             signs_array = np.multiply(signs_array_lower,  signs_array_upper)
 
+#        window_width =20
+#        intensity = np.convolve(pyro_data[:,2], np.ones(window_width), 'valid') / window_width
         # Pack data into dataframe and return
         df['x'] = pyro_data[dt:,0]
         df['y'] = pyro_data[dt:,1]
@@ -365,19 +364,18 @@ def extend_CMOS_data(df_camera, df_pyro):
     # compute machine coordinates of each camera image
     x_array = []
     y_array = []
+    pyro_value_array = []
     for index_pyro in df_camera['index_pyro']:
         x_array.append(df_pyro.at[int(index_pyro),'x'],)
         y_array.append(df_pyro.at[int(index_pyro),'y'],)
+        pyro_value_array.append(df_pyro.at[int(index_pyro),'intensity'],)
     df_camera['x'] = x_array
     df_camera['y'] = y_array
+    df_camera['pyro_value'] = pyro_value_array
     
 
-    #todo: plot melt pool area vs. pyrometer value
-    #todo: plot CMOS 2D and pyro-value 2D
-    #todo: store dataframe
-    #todo: manual on how to access stored images from coordinates
-    
-
+    #todo: (prio 3)store dataframe
+    #todo: (prio 3)manual on how to access stored images from coordinates
 
     return(df_camera, df_pyro, results)
 
@@ -451,7 +449,7 @@ def plot_data(df_camera, df_pyro, results, selection):
         plt.show()
     if selection[3]:
         # show images at their x & y positions with their intensity
-        # todo: x,y scaling, units
+        # todo: (prio 1)x,y scaling, units
         fig, ax = plt.subplots()
         ax.scatter(df_camera["x"], df_camera["y"], c=df_camera["intensity"],
             cmap="inferno")
@@ -460,7 +458,7 @@ def plot_data(df_camera, df_pyro, results, selection):
         plt.show()
     if selection[4]:
         # show images at their x & y positions with ON / OFF detection
-        # todo: x,y scaling, units
+        # todo: (prio 1)x,y scaling, units
         fig, ax = plt.subplots()
         df_camera_ON = df_camera.loc[df_camera['ON_OFF'] == 1.0]
         df_camera_OFF = df_camera.loc[df_camera['ON_OFF'] == 0.0]
@@ -513,12 +511,28 @@ def plot_data(df_camera, df_pyro, results, selection):
         ax.legend()
         plt.show()
 
+    if selection[6]:
+        # plot melt pool area vs. pyrometer value
+        fig,ax = plt.subplots()
+        x = df_camera['meltpool_area']
+        y = df_camera['pyro_value']
+        ax.scatter(x,y)
+        ax.set_xlabel("meltpool area")
+        ax.set_ylabel("pyrometer value")
+        ax.legend()
+        plt.show()
+
+    if selection[7]:
+        #todo: (prio 1)plot CMOS 2D and pyro-value 2D
+        fig,ax = plt.subplots()
+        ax.legend()
+        plt.show()
 
 def display_image(image):
     """
     Display an image. This is a helper function meant for debugging.
     """
-    # todo: normalize pixels in image to max intensity of a series of images
+    # todo: (prio 1)normalize pixels in image to max intensity of a series of images
     pylab.imshow(image, cmap="Greys_r", vmin=0, vmax=255)
     pylab.show()
 
@@ -551,7 +565,7 @@ def main():
     else:
         file_list = create_file_list(job_name)
     for file in file_list:
-        # todo: check if processed files are available as .pkl files
+        # todo: (prio 3)check if processed files are available as .pkl files
         # Fetch and process images form the .mkv file
         if verbal == True:
             print("Started processing: " + file['filename_camera'])
