@@ -581,7 +581,6 @@ def display_image(image):
     """
     Display an image. This is a helper function meant for debugging.
     """
-    # todo: (prio 1)normalize pixels in image to max intensity of a series of images
     pylab.imshow(image, cmap="Greys_r", vmin=0, vmax=255)
     pylab.show()
 
