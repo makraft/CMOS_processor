@@ -26,7 +26,7 @@ Height = 300
 # The script prints what it's doing
 verbal = True
 # Plots are generated and shown for intermediate results
-visual = [False,False,False,True,True,True,False]
+visual = [False,False,False,True,True,True,False,True]
 # 0: ON/OFF plot camera
 # 1: ON/OFF plot pyrometer1
 # 2: combined ON/OFF plot
@@ -34,6 +34,7 @@ visual = [False,False,False,True,True,True,False]
 # 4: scatter plot of ON/OFF @x,y position
 # 5: scatter plot of vector length vs. slope
 # 6: scatter plot of melt pool area vs. pyrometer value
+# 7: two adjacent scatter plots with image position and pyrometer position
 
 # Tell program if it should only process one selected part/layer combination
 # Set True or False
@@ -523,9 +524,17 @@ def plot_data(df_camera, df_pyro, results, selection):
         plt.show()
 
     if selection[7]:
-        #todo: (prio 1)plot CMOS 2D and pyro-value 2D
-        fig,ax = plt.subplots()
-        ax.legend()
+        # plot CMOS 2D and pyro-value 2D in adjacent plots
+        fig,(ax1,ax2) = plt.subplots(1,2)
+        ax1.scatter(df_camera["x"], df_camera["y"], c=df_camera["intensity"],
+            cmap="inferno")
+        ax1.set_title("CMOS image position with image intensity: " +
+            "PART {} | LAYER NUMBER {}".format(part, layer))
+        ax1.legend()
+        ax2.scatter(df_pyro["x"], df_pyro["y"], c = df_pyro["intensity"],
+            cmap="inferno")
+        ax2.set_title("Pyrometer positions with measurement value: " +
+            "PART {} | LAYER NUMBER {}".format(part, layer))
         plt.show()
 
 def display_image(image):
