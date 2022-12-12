@@ -27,7 +27,7 @@ Height = 300
 # The script prints what it's doing
 verbal = True
 # Plots are generated and shown for intermediate results
-visual = [False,False,False,True,True,True,False,True]
+visual = [True,True,False,True,True,False,False,False]
 # 0: ON/OFF plot camera
 # 1: ON/OFF plot pyrometer1
 # 2: combined ON/OFF plot
@@ -42,7 +42,7 @@ visual = [False,False,False,True,True,True,False,True]
 cherrypick = True
 # If set to true, specify which one
 cherry = {
-    "part" : "13",
+    "part" : "18",
     "layer": "0-06"
 }
 
@@ -100,7 +100,7 @@ def process_mkv(file):
     image_index_array = []
     intensity_array = []
     meltpool_area_array = []
-    image_area_array = []
+    brightest_pixel_array = []
 
 
     CMOS_video = imageio.get_reader(file['filename_camera'], 'ffmpeg')
@@ -149,6 +149,9 @@ def process_mkv(file):
         image_array[index] = image_min_noise.astype(np.uint8)
         # calculate total intensity
         intensity_array.append(np.sum(image_array[index]))
+        # find brightest pixel. Is required for normalizing image brightness
+        # when displayed
+        brightest_pixel_array.append(np.max(image_array[index]))
 
         # calculate melt pool area
         image_area = image_min_noise
@@ -158,7 +161,6 @@ def process_mkv(file):
         meltpool_area_array.append(meltpool_area)
         # compute a melt pool image based on the area calculation
         meltpool_image = image_area * 255
-        image_area_array.append(meltpool_image)
 
     intensity_array = np.array(intensity_array, dtype=np.int64)
 
@@ -177,7 +179,8 @@ def process_mkv(file):
     # store processed images as a python pickle file
     df_images = pandas.DataFrame(index=image_index_array)
     df_images['image'] = image_array
-    df_images['image_area'] = image_area_array
+    df_images['area_threshold'] = meltpool_threshold_value
+    df_images['brightests_pixel'] = np.max(brightest_pixel_array)
     filename_pkl = file['filename_camera'].replace(".mkv",".pkl")
     df_images.to_pickle(filename_pkl)
     
@@ -373,6 +376,9 @@ def extend_CMOS_data(df_camera, df_pyro):
         pyro_value_array.append(df_pyro.at[int(index_pyro),'intensity'],)
     df_camera['x'] = x_array
     df_camera['y'] = y_array
+    x_array_mm, y_array_mm = bit2mm(df_camera['x'],df_camera['y'])
+    df_camera['x_mm'] = x_array_mm
+    df_camera['y_mm'] = y_array_mm
     df_camera['pyro_value'] = pyro_value_array
     
 
@@ -451,10 +457,8 @@ def plot_data(df_camera, df_pyro, results, selection):
         plt.show()
     if selection[3]:
         # show images at their x & y positions with their intensity
-        # todo: (prio 1)x,y scaling, units
         fig, ax = plt.subplots()
-        x,y = bit2mm(df_camera["x"], df_camera["y"])
-        ax.scatter(x, y, c=df_camera["intensity"],
+        ax.scatter(df_camera["x_mm"], df_camera["y_mm"],c=df_camera["intensity"],
             cmap="inferno")
         ax.set_title("CMOS image position with image intensity: " +
             "PART {} | LAYER NUMBER {}".format(part, layer))
@@ -470,19 +474,27 @@ def plot_data(df_camera, df_pyro, results, selection):
         plt.show()
     if selection[4]:
         # show images at their x & y positions with ON / OFF detection
-        # todo: (prio 1)x,y scaling, units
         fig, ax = plt.subplots()
         df_camera_ON = df_camera.loc[df_camera['ON_OFF'] == 1.0]
         df_camera_OFF = df_camera.loc[df_camera['ON_OFF'] == 0.0]
         ax.set_xlabel("x")
         ax.set_ylabel("y")
-        ax.scatter(df_camera_ON["x"], df_camera_ON["y"], c="darkorange", 
+        ax.scatter(df_camera_ON["x_mm"], df_camera_ON["y_mm"], c="darkorange", 
             alpha=0.5, label="ON")
-        ax.scatter(df_camera_OFF["x"], df_camera_OFF["y"], c="slategray",
+        ax.scatter(df_camera_OFF["x_mm"], df_camera_OFF["y_mm"], c="slategray",
             alpha=0.5, label="OFF")
         ax.legend()
         ax.set_title("CMOS image position with ON/OFF detection: " +
             "PART {} | LAYER NUMBER {}".format(part, layer))
+        ax.set_xlabel("x position [mm] in machine coordinates")
+        ax.set_ylabel("y position [mm] in machine coordinates")
+        spacing=1
+        x_grid_locator = MultipleLocator(spacing)
+        y_grid_locator = MultipleLocator(spacing)
+        ax.xaxis.set_minor_locator(x_grid_locator)
+        ax.yaxis.set_minor_locator(y_grid_locator)
+        ax.grid(True,which='minor')
+        ax.axes.set_aspect('equal')
         plt.show()
 
     if selection[5]:
@@ -537,14 +549,32 @@ def plot_data(df_camera, df_pyro, results, selection):
     if selection[7]:
         # plot CMOS 2D and pyro-value 2D in adjacent plots
         fig,(ax1,ax2) = plt.subplots(1,2)
-        ax1.scatter(df_camera["x"], df_camera["y"], c=df_camera["intensity"],
+        ax1.scatter(df_camera["x_mm"], df_camera["y_mm"], c=df_camera["intensity"],
             cmap="inferno")
         ax1.set_title("CMOS image position with image intensity: " +
             "PART {} | LAYER NUMBER {}".format(part, layer))
-        ax2.scatter(df_pyro["x"], df_pyro["y"], c = df_pyro["intensity"],
+        ax1.set_xlabel("x position [mm] in machine coordinates")
+        ax1.set_ylabel("y position [mm] in machine coordinates")
+        x,y = bit2mm(df_pyro["x"], df_pyro["y"])
+        ax2.scatter(x,y, c = df_pyro["intensity"],
             cmap="inferno")
         ax2.set_title("Pyrometer positions with measurement value: " +
             "PART {} | LAYER NUMBER {}".format(part, layer))
+        ax2.set_xlabel("x position [mm] in machine coordinates")
+        ax2.set_ylabel("y position [mm] in machine coordinates")
+        spacing=1
+        x_grid_locator = MultipleLocator(spacing)
+        y_grid_locator = MultipleLocator(spacing)
+        ax1.xaxis.set_minor_locator(x_grid_locator)
+        ax1.yaxis.set_minor_locator(y_grid_locator)
+        ax1.grid(True,which='minor')
+        ax1.axes.set_aspect('equal')
+        x_grid_locator = MultipleLocator(spacing)
+        y_grid_locator = MultipleLocator(spacing)
+        ax2.xaxis.set_minor_locator(x_grid_locator)
+        ax2.yaxis.set_minor_locator(y_grid_locator)
+        ax2.grid(True,which='minor')
+        ax2.axes.set_aspect('equal')
         plt.show()
 
 def display_image(image):
@@ -554,6 +584,24 @@ def display_image(image):
     # todo: (prio 1)normalize pixels in image to max intensity of a series of images
     pylab.imshow(image, cmap="Greys_r", vmin=0, vmax=255)
     pylab.show()
+
+def area_image(image, threshold):
+    """
+    Convert grayscale image to purely black/white according to the threshold.
+    """
+    image[image<threshold] = 0
+    image[image>=threshold] = 1
+    # compute a melt pool image based on the area calculation
+    converted_image = image* 255
+    return(converted_image)
+
+def normalized_image(image, maximum):
+    """
+    Normalize a grey scale image with a maximum value.
+    """
+    multiplicator = 255 / maximum
+    out_image = np.round(image * multiplicator).astype(np.uint8)
+    return(out_image)
 
 def bit2mm(x, y, fieldsize=600, sl2=True):
     """
