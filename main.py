@@ -27,11 +27,11 @@ Height = 300
 # The script prints what it's doing
 verbal = True
 # Plots are generated and shown for intermediate results
-visual = [False,False,False,False,False,True,False,False]
+visual = [True,True,True,True,True,True,False,False]
 # 0: ON/OFF plot camera
 # 1: ON/OFF plot pyrometer1
 # 2: combined ON/OFF plot
-# 3: scatter plot of intensity @x,y position
+# 3: scatter plot of image intensity @x,y position
 # 4: scatter plot of ON/OFF @x,y position
 # 5: scatter plot of vector length vs. slope
 # 6: scatter plot of melt pool area vs. pyrometer value
@@ -42,8 +42,8 @@ visual = [False,False,False,False,False,True,False,False]
 cherrypick = True
 # If set to true, specify which one
 cherry = {
-    "part" : "5",
-    "layer": "0-06"
+    "part" : "17",
+    "layer": "0-09"
 }
 
 # Set limit to reduce computing time for image processing. Default = None
@@ -426,16 +426,16 @@ def plot_data(df_camera, df_pyro, results, selection):
         # Plot the results of the pyro velocity ON/OFF detection
         fig, ax = plt.subplots()
         line1, = ax.plot(df_pyro["velocity"],color="cornflowerblue",label="velocity")
-        line2 = ax.axhline(df_pyro["threshold"][1], color="navy",label="velocity_threshold")
+        line2 = ax.axhline(df_pyro["threshold"][1], color="navy",label="scan speed parameter")
         x = results["pyro_midpoints"]
         y = np.ones(len(x)) * df_pyro['threshold'][1]
         line3 = ax.scatter(x,y,c="darkgreen",label="midpoints")
-        ax.set_ylabel("Velocity")
+        ax.set_ylabel("velocity [mm/s]")
         ax.set_xlabel("measurement number")
         ax2 = ax.twinx()
         line4, = ax2.plot(df_pyro["ON_OFF"],color="orangered",label="ON / OFF")
         ax2.set_ylabel("OFF / ON")
-        ax.legend(handles=[line1,line2,line3,line4],loc=0)
+#        ax.legend(handles=[line1,line2,line3,line4],loc=0)
         ax.set_title("ON/OFF detection of pyro velocity: " +
             "PART {} | LAYER {}".format(part, layer))
         plt.show()
@@ -534,9 +534,11 @@ def plot_data(df_camera, df_pyro, results, selection):
         # show average slope value
         ax.axhline(slope_average,color="orange",label="average scaling factor",
             linestyle="--",zorder=2)
-        ax.set_xlabel("vector length [pyrometer data points]")
+        ax.set_xlabel("vector length [CMOS images]")
         ax.set_ylabel("Scaling factor [pyrometer data points / CMOS image]")
         ax.legend()
+        ax.set_title("Evaluation of scan vector scaling: " +
+            "PART {} | LAYER {}".format(part, layer))
         plt.show()
 
     if selection[6]:
@@ -555,15 +557,13 @@ def plot_data(df_camera, df_pyro, results, selection):
         fig,(ax1,ax2) = plt.subplots(1,2)
         ax1.scatter(df_camera["x_mm"], df_camera["y_mm"], c=df_camera["intensity"],
             cmap="inferno")
-        ax1.set_title("CMOS image position with image intensity: " +
-            "PART {} | LAYER {}".format(part, layer))
+        ax1.set_title("CMOS images intensity @ position")
         ax1.set_xlabel("x position [mm] in machine coordinates")
         ax1.set_ylabel("y position [mm] in machine coordinates")
         x,y = bit2mm(df_pyro["x"], df_pyro["y"])
         ax2.scatter(x,y, c = df_pyro["intensity"],
             cmap="inferno")
-        ax2.set_title("Pyrometer positions with measurement value: " +
-            "PART {} | LAYER {}".format(part, layer))
+        ax2.set_title("Pyrometer measurements @ position")
         ax2.set_xlabel("x position [mm] in machine coordinates")
         ax2.set_ylabel("y position [mm] in machine coordinates")
         spacing=1
