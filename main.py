@@ -13,7 +13,6 @@ import time
 import pandas
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MultipleLocator
-import pickle
 
 # Edit this line to select the job to be processed
 job_name = "B002"
@@ -27,7 +26,7 @@ Height = 300
 # The script prints what it's doing
 verbal =True
 # Plots are generated and shown for intermediate results
-visual = [False,False,False,False,False,False,False,False]
+visual = [True,True,True,True,True,True,True,False]
 # 0: ON/OFF plot camera
 # 1: ON/OFF plot pyrometer1
 # 2: combined ON/OFF plot
@@ -39,10 +38,10 @@ visual = [False,False,False,False,False,False,False,False]
 
 # Tell program if it should only process one selected part/layer combination
 # Set True or False
-cherrypick = False
+cherrypick =True
 # If set to true, specify which one
 cherry = {
-    "part" : "17",
+    "part" : "5",
     "layer": "0-06"
 }
 
@@ -414,7 +413,7 @@ def plot_data(df_camera, df_pyro, results, selection):
     layer = df_camera["layer"][1]
     if selection[0]:
         # Plot the results of the CMOS ON/OFF detection
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(8,5))
         line1, = ax.plot(df_camera["intensity"],color="cornflowerblue",label="intensity")
         line2 = ax.axhline(df_camera["threshold"][1], color="navy",label="intensity threshold")
         x = results["camera_midpoints"]
