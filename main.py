@@ -25,9 +25,9 @@ Height = 300
 
 # Specify settings for evaluating the main script
 # The script prints what it's doing
-verbal = True
+verbal =True
 # Plots are generated and shown for intermediate results
-visual = [True,True,True,True,True,True,False,False]
+visual = [False,False,False,False,False,False,False,False]
 # 0: ON/OFF plot camera
 # 1: ON/OFF plot pyrometer1
 # 2: combined ON/OFF plot
@@ -39,11 +39,11 @@ visual = [True,True,True,True,True,True,False,False]
 
 # Tell program if it should only process one selected part/layer combination
 # Set True or False
-cherrypick = True
+cherrypick = False
 # If set to true, specify which one
 cherry = {
     "part" : "17",
-    "layer": "0-09"
+    "layer": "0-06"
 }
 
 # Set limit to reduce computing time for image processing. Default = None
@@ -80,6 +80,9 @@ def create_file_list(job, **kwargs):
         for part_number in part_number_list:
             layer_list = os.listdir(filename_camera_prefix + part_number)
             for layer in layer_list:
+                if layer.endswith('.pkl'):
+                    # ignore the previously processed files
+                    continue
                 filename_camera = filename_camera_prefix + part_number + "/" + layer
                 l_pyro = layer.split('.')[0].replace("-",".") + '.pcd'
                 filename_pyro1 = filename_pyro1_prefix + part_number + "/" + l_pyro
@@ -181,10 +184,12 @@ def process_mkv(file):
     df_images['image'] = image_array
     df_images['area_threshold'] = meltpool_threshold_value
     df_images['brightest_pixel'] = np.max(brightest_pixel_array)
-    filename_pkl = file['filename_camera'].replace(".mkv",".pkl")
+    filename_pkl = file['filename_camera'].replace(".mkv","_images.pkl")
     df_images.to_pickle(filename_pkl)
     
-    # create dataframe that is returned
+    # Create dataframe that is returned.
+    # This dataframe is not stored here, since it makes more sense to store it 
+    # after it has been extended with coordinates.
     df = pandas.DataFrame(index=image_index_array)
     df['intensity'] = intensity_array
     df['meltpool_area'] = meltpool_area_array
@@ -246,6 +251,8 @@ def process_pcd(file):
         df['velocity'] = velocity_array_smoothed_mmps
         df['ON_OFF'] = signs_array
         df['threshold'] = scan_velocity_hatch_mmps
+        filename_pkl = file['filename_pyro1'].replace(".pcd",".pkl")
+        df.to_pickle(filename_pkl)
     return df
 
 
@@ -629,32 +636,65 @@ def bit2mm(x, y, fieldsize=600, sl2=True):
 
     return (x_mm, y_mm)
 
+def load_processed(file: str):
+    """
+    Check if a file has already been processed before and return a Dataframe if
+    that is the case.
+    """
+    # handle CMOS data files
+    if file.endswith('.mkv'):
+        try:
+            df = pandas.read_pickle(file.replace('.mkv','.pkl'))
+            return(True, df)
+        except FileNotFoundError:
+            return(False, pandas.DataFrame())
+    # handle pyrometer data files
+    elif file.endswith('.pcd'):
+        try:
+            df = pandas.read_pickle(file.replace('.pcd','.pkl'))
+            return(True, df)
+        except FileNotFoundError:
+            return(False, pandas.DataFrame())
+    else:
+        raise FileNotFoundError
+
+
 def main():
     if cherrypick:
         file_list = create_file_list(job_name, cherry=cherry)
     else:
         file_list = create_file_list(job_name)
     for file in file_list:
-        # todo: (prio 3)check if processed files are available as .pkl files
-        # Fetch and process images form the .mkv file
-        if verbal == True:
-            print("Started processing: " + file['filename_camera'])
-            tstart = time.time()
-        image_df = process_mkv(file)
-        if verbal:
-            print("Process finished in {0} seconds".format(time.time()-tstart))
-        pass
-
         # Fetch and process pyro data from the .pcd file
-        if verbal == True:
-            print("Started processing: " + file['filename_pyro1'])
-            tstart = time.time()
-        pyro1_df = process_pcd(file)
-        if verbal:
-            print("Process finished in {0} seconds".format(time.time()-tstart))
+        preexists, pyro1_df = load_processed(file['filename_pyro1'])
+        if not preexists:
+            if verbal == True:
+                print("Started processing: " + file['filename_pyro1'])
+                tstart = time.time()
+            pyro1_df = process_pcd(file)
+            if verbal:
+                print("Process finished in {0} seconds".format(time.time()-tstart))
+
+        # Fetch and process images form the .mkv file
+        preexists, image_df = load_processed(file['filename_camera'])
+        if not preexists:
+            if verbal == True:
+                print("Started processing: " + file['filename_camera'])
+                tstart = time.time()
+            image_df = process_mkv(file)
+            if verbal:
+                print("Process finished in {0} seconds".format(time.time()-tstart))
+
 
         # fit pyro & CMOS data
         image_df,pyro1_df,results = extend_CMOS_data(image_df, pyro1_df)
+        # store image dataframe with correlated coordinates
+        filename_pkl = file['filename_camera'].replace(".mkv",".pkl")
+        image_df.to_pickle(filename_pkl)
+        # store results to access later if required.
+        filename_pkl = file['filename_camera'].replace(".mkv","_results.pkl")
+        image_df.to_pickle(filename_pkl)
+        #todo: fetch files from _results.pkl if available
         # plot results
         plot_data(image_df,pyro1_df,results, visual)
 
