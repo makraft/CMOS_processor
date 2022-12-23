@@ -2,6 +2,7 @@
 Transform data from the Aconity CMOS high speed camera and assign machine
 coordinates by utilizing data from the pyrometers.
 """
+import pickle
 import math
 import csv
 import statistics
@@ -26,7 +27,7 @@ Height = 300
 # The script prints what it's doing
 verbal =True
 # Plots are generated and shown for intermediate results
-visual = [True,True,True,True,True,True,True,False]
+visual = [False,False,False,False,False,False,False,False]
 # 0: ON/OFF plot camera
 # 1: ON/OFF plot pyrometer1
 # 2: combined ON/OFF plot
@@ -38,7 +39,7 @@ visual = [True,True,True,True,True,True,True,False]
 
 # Tell program if it should only process one selected part/layer combination
 # Set True or False
-cherrypick =True
+cherrypick =False
 # If set to true, specify which one
 cherry = {
     "part" : "5",
@@ -399,7 +400,7 @@ def slope_error(dc, dp):
     Compute the error of the slope function. c = camera, p = pyrometer
     """
     delta_dc = math.sqrt(2)
-    delta_dp = 1
+    delta_dp = math.sqrt(2)
     dp_err = (1/dc)*delta_dp
     dc_err = (dp/(dc**2))*(-1)*delta_dc
     slope_err = math.sqrt(dp_err**2 + dc_err**2)
@@ -690,10 +691,7 @@ def main():
         # store image dataframe with correlated coordinates
         filename_pkl = file['filename_camera'].replace(".mkv",".pkl")
         image_df.to_pickle(filename_pkl)
-        # store results to access later if required.
-        filename_pkl = file['filename_camera'].replace(".mkv","_results.pkl")
-        image_df.to_pickle(filename_pkl)
-        #todo: fetch files from _results.pkl if available
+        # todo: store results to access later if required.
         # plot results
         plot_data(image_df,pyro1_df,results, visual)
 
