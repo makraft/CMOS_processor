@@ -23,6 +23,7 @@ pip install requirements.txt
 On the Aconity Midi+ main computer:
 Copy all folders in the \Aconity_jobname\sensors folder into a folder inside the \Jobs folder in this repository.
 The folder structure as it is generated on the Aconity PC:
+```py
     \Aconity_jobname
         \sensors
             \2Pyrometer
@@ -30,8 +31,10 @@ The folder structure as it is generated on the Aconity PC:
                 \pyrometer2
             \hsCamera
         \topics
+```
 
 The folder structure as it should look like in your clone of the repository:
+```py
     \CMOS_processor
         \Jobs
             \your_jobname
@@ -39,6 +42,7 @@ The folder structure as it should look like in your clone of the repository:
                     \pyrometer1
                     \pyrometer2
                 \hsCamera
+```
 
 The folders \pyrometer1 and \pyrometer2 already contain the part folders with the .pcd files
 The CMOS camera data needs to be manually copied from the camera PC into the \hsCamera folder.
