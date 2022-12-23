@@ -125,7 +125,6 @@ def process_mkv(file):
             break
         # Convert image to black and white
         image_bw = image[:,:,0].reshape(image.shape[0],image.shape[1])
-        #display_image(image_bw)
 
         # Crop image to relevant area
         image_cropped = image_bw[
@@ -162,8 +161,6 @@ def process_mkv(file):
         image_area[image_area>= meltpool_threshold_value] = 1
         meltpool_area = np.sum(image_area)
         meltpool_area_array.append(meltpool_area)
-        # compute a melt pool image based on the area calculation
-        meltpool_image = image_area * 255
 
     intensity_array = np.array(intensity_array, dtype=np.int64)
 
@@ -242,8 +239,6 @@ def process_pcd(file):
             print("Warning: No initial high velocity in pyrometer data detected.")
             signs_array = np.multiply(signs_array_lower,  signs_array_upper)
 
-#        window_width =20
-#        intensity = np.convolve(pyro_data[:,2], np.ones(window_width), 'valid') / window_width
         # Pack data into dataframe and return
         df['x'] = pyro_data[dt:,0]
         df['y'] = pyro_data[dt:,1]
@@ -388,10 +383,6 @@ def extend_CMOS_data(df_camera, df_pyro):
     df_camera['y_mm'] = y_array_mm
     df_camera['pyro_value'] = pyro_value_array
     
-
-    #todo: (prio 3)store dataframe
-    #todo: (prio 3)manual on how to access stored images from coordinates
-
     return(df_camera, df_pyro, results)
 
 
@@ -442,7 +433,6 @@ def plot_data(df_camera, df_pyro, results, selection):
         ax2 = ax.twinx()
         line4, = ax2.plot(df_pyro["ON_OFF"],color="orangered",label="ON / OFF")
         ax2.set_ylabel("OFF / ON")
-#        ax.legend(handles=[line1,line2,line3,line4],loc=0)
         ax.set_title("ON/OFF detection of pyro velocity: " +
             "PART {} | LAYER {}".format(part, layer))
         plt.show()
@@ -490,10 +480,6 @@ def plot_data(df_camera, df_pyro, results, selection):
             alpha=0.5, label="ON")
         ax.scatter(df_camera_OFF["x_mm"], df_camera_OFF["y_mm"], c="slategray",
             alpha=0.5, label="OFF")
-#        ax.scatter(df_camera_ON["x_mm"][160], df_camera_ON["y_mm"][160], c="navy",label="# 160")
-#        ax.scatter(df_camera_ON["x_mm"][230], df_camera_ON["y_mm"][230], c="red",label="# 230")
-#        ax.scatter(df_camera_ON["x_mm"][300], df_camera_ON["y_mm"][300], c="green",label="# 300")
-#        ax.scatter(df_camera_ON["x_mm"][370], df_camera_ON["y_mm"][370], c="black",label="# 370")
         ax.legend()
         ax.set_title("CMOS image position with ON/OFF detection: " +
             "PART {} | LAYER {}".format(part, layer))
@@ -511,8 +497,6 @@ def plot_data(df_camera, df_pyro, results, selection):
     if selection[5]:
         # plot vector length(camera delta) vs. slope as scatterplot
         fig,ax = plt.subplots()
-#        ax.errorbar(results["camera_delta"],results["slopes"],
-#            yerr=results["slope_errors"],c="navy",label="scan vectors",fmt='o')
         
         # calculate the average slope
         slope_total=0
