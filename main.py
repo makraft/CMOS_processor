@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import MultipleLocator
 
 # Edit this line to select the job to be processed
-job_name = "B002"
+job_name = "Pyro_example_data"
 # Specify the CMOS camera settings.
 Offset_X = 832
 Offset_Y = 808
@@ -27,7 +27,7 @@ Height = 300
 # The script prints what it's doing
 verbal =True
 # Plots are generated and shown for intermediate results
-visual = [False,False,False,False,False,False,False,False]
+visual = [False,True,False,False,False,False,False,False]
 # 0: ON/OFF plot camera
 # 1: ON/OFF plot pyrometer1
 # 2: combined ON/OFF plot
@@ -75,16 +75,17 @@ def create_file_list(job, **kwargs):
             'layer':layer.split('.')[0]}
         file_list.append(file_dict)
     else:
-        part_number_list = os.listdir(filename_camera_prefix)
+        part_number_list = os.listdir(filename_pyro1_prefix)
         # Create a dictionary with file information for every single file
         for part_number in part_number_list:
-            layer_list = os.listdir(filename_camera_prefix + part_number)
+            layer_list = os.listdir(filename_pyro1_prefix + part_number)
             for layer in layer_list:
                 if layer.endswith('.pkl'):
                     # ignore the previously processed files
                     continue
                 filename_camera = filename_camera_prefix + part_number + "/" + layer
-                l_pyro = layer.split('.')[0].replace("-",".") + '.pcd'
+#                l_pyro = "-".join(layer.split('.')[:-1]) + '.pcd'
+                l_pyro = layer
                 filename_pyro1 = filename_pyro1_prefix + part_number + "/" + l_pyro
                 filename_pyro2 = filename_pyro2_prefix + part_number + "/" + l_pyro
                 file_dict ={'filename_camera':filename_camera,
@@ -210,8 +211,8 @@ def process_pcd(file):
         scanner_y_offset = next(reader)
         scanner_rotation = next(reader)
         scanner_field_correction_file = next(reader)
-        pyro_data = np.array(list(reader)).astype(np.int64)
-        assert np.sum(pyro_data[:,2]-pyro_data[:,3]) == 0, "The data in the two pyro value columns does not match"
+        pyro_data = np.array(list(reader)).astype(np.float)
+#        assert np.sum(pyro_data[:,2]-pyro_data[:,3]) == 0, "The data in the two pyro value columns does not match"
         # Compute velocity profile
         dt = 1     # time interval for dx/dt, dy/dt
         Dx = np.diff(pyro_data[:,0], dt).astype(np.float)
@@ -401,8 +402,8 @@ def plot_data(df_camera, df_pyro, results, selection):
     """
     Generate plots from the data generated during the sensor data processing.
     """
-    part = df_camera["part"][1]
-    layer = df_camera["layer"][1]
+    part = df_pyro["part"][1]
+    layer = df_pyro["layer"][1]
     if selection[0]:
         # Plot the results of the CMOS ON/OFF detection
         fig, ax = plt.subplots(figsize=(8,5))
@@ -660,23 +661,25 @@ def main():
                 print("Process finished in {0} seconds".format(time.time()-tstart))
 
         # Fetch and process images form the .mkv file
-        preexists, image_df = load_processed(file['filename_camera'])
-        if not preexists:
-            if verbal == True:
-                print("Started processing: " + file['filename_camera'])
-                tstart = time.time()
-            image_df = process_mkv(file)
-            if verbal:
-                print("Process finished in {0} seconds".format(time.time()-tstart))
+#        preexists, image_df = load_processed(file['filename_camera'])
+#        if not preexists:
+#            if verbal == True:
+#                print("Started processing: " + file['filename_camera'])
+#                tstart = time.time()
+#            image_df = process_mkv(file)
+#            if verbal:
+#                print("Process finished in {0} seconds".format(time.time()-tstart))
 
 
         # fit pyro & CMOS data
-        image_df,pyro1_df,results = extend_CMOS_data(image_df, pyro1_df)
+#        image_df,pyro1_df,results = extend_CMOS_data(image_df, pyro1_df)
         # store image dataframe with correlated coordinates
-        filename_pkl = file['filename_camera'].replace(".mkv",".pkl")
-        image_df.to_pickle(filename_pkl)
+#        filename_pkl = file['filename_camera'].replace(".mkv",".pkl")
+#        image_df.to_pickle(filename_pkl)
         # todo: store results to access later if required.
         # plot results
+        image_df = None
+        results = None
         plot_data(image_df,pyro1_df,results, visual)
 
 if __name__ == "__main__":
