@@ -27,7 +27,7 @@ Height = 300
 # The script prints what it's doing
 verbal =True
 # Plots are generated and shown for intermediate results
-visual = [False,True,False,False,False,False,False,False]
+visual = [False,False,False,False,False,False,False,False]
 # 0: ON/OFF plot camera
 # 1: ON/OFF plot pyrometer1
 # 2: combined ON/OFF plot
@@ -217,7 +217,9 @@ def process_pcd(file):
         dt = 1     # time interval for dx/dt, dy/dt
         Dx = np.diff(pyro_data[:,0], dt).astype(np.float)
         Dy = np.diff(pyro_data[:,1], dt).astype(np.float)
-        Dx_mm, Dy_mm = bit2mm(Dx, Dy)
+#        Dx_mm, Dy_mm = bit2mm(Dx, Dy)
+        Dx_mm = Dx
+        Dy_mm = Dy
         velocity_array_mm = np.linalg.norm(np.stack((Dx_mm,Dy_mm), axis=1), axis=1) / dt
         window_width = 20
         velocity_array_smoothed_mm = np.convolve(velocity_array_mm, np.ones(window_width),mode='same') / window_width
@@ -243,10 +245,12 @@ def process_pcd(file):
         # Pack data into dataframe and return
         df['x'] = pyro_data[dt:,0]
         df['y'] = pyro_data[dt:,1]
-        df['intensity'] = pyro_data[dt:,2]
+        df['intensity'] = pyro_data[dt:,3]
         df['velocity'] = velocity_array_smoothed_mmps
         df['ON_OFF'] = signs_array
         df['threshold'] = scan_velocity_hatch_mmps
+        df['part'] = file['part_number']
+        df['layer'] = file['layer']
         filename_pkl = file['filename_pyro1'].replace(".pcd",".pkl")
         df.to_pickle(filename_pkl)
     return df
@@ -426,9 +430,9 @@ def plot_data(df_camera, df_pyro, results, selection):
         fig, ax = plt.subplots()
         line1, = ax.plot(df_pyro["velocity"],color="cornflowerblue",label="velocity")
         line2 = ax.axhline(df_pyro["threshold"][1], color="navy",label="scan speed parameter")
-        x = results["pyro_midpoints"]
-        y = np.ones(len(x)) * df_pyro['threshold'][1]
-        line3 = ax.scatter(x,y,c="darkgreen",label="midpoints")
+#        x = results["pyro_midpoints"]
+#        y = np.ones(len(x)) * df_pyro['threshold'][1]
+#        line3 = ax.scatter(x,y,c="darkgreen",label="midpoints")
         ax.set_ylabel("velocity [mm/s]")
         ax.set_xlabel("measurement number")
         ax2 = ax.twinx()
@@ -436,6 +440,7 @@ def plot_data(df_camera, df_pyro, results, selection):
         ax2.set_ylabel("OFF / ON")
         ax.set_title("ON/OFF detection of pyro velocity: " +
             "PART {} | LAYER {}".format(part, layer))
+        ax.legend()
         plt.show()
     if selection[2]:
         # Compare the results from the two ON/OFF detections
